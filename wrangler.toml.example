@@ -1,0 +1,41 @@
+name = "__REPLACE_ME_PROJECT_NAME__"
+compatibility_date = "2025-03-01"
+pages_build_output_dir = "."
+
+[[d1_databases]]
+binding = "DB"
+database_name = "__REPLACE_ME_DB_NAME__"
+database_id = "__REPLACE_ME_DB_ID__"
+
+# ---------------------------------------------------------------------------
+# Copy this file to `wrangler.toml` (gitignored) and fill in the three
+# __REPLACE_ME_*__ values after running `wrangler d1 create`.
+#
+# This local `wrangler.toml` is only used for `wrangler d1 migrations apply`
+# and `wrangler pages dev`. Cloudflare Pages' git-integrated deploy ignores
+# it — secrets and the production D1 binding are set manually in the
+# Cloudflare dashboard (Pages project → Settings → Environment variables /
+# Bindings, D1 binding MUST be named `DB`).
+#
+# Required environment variables:
+#   META_PIXEL_ID           Meta Pixel ID linked to the WhatsApp Business
+#                            Account in Events Manager
+#   META_ACCESS_TOKEN       Meta CAPI long-lived access token
+#   META_PAGE_ID             Facebook Page ID connected to the WhatsApp
+#                            number (required by the business_messaging
+#                            CAPI payload's user_data.page_id)
+#   DASH_KEY                Random string gating /dash and GET /api/*
+#   WHATSAPP_WEBHOOK_SLUG    UUID v4 — paste the full
+#                            /webhook/whatsapp/<slug> URL into the uazapi
+#                            instance's webhook configuration
+#
+# Optional:
+#   META_TEST_EVENT_CODE    Meta Events Manager Test Events code (use while
+#                            validating Fase 0 / before going live)
+#   DEFAULT_COUNTRY_CODE    Calling code prepended to local-format phone
+#                            numbers before hashing (default "55" Brazil)
+#   UAZAPI_BASE_URL          e.g. https://djhonata.uazapi.com — only needed
+#                            if the backend ever calls uazapi's API back
+#                            (not required just to receive webhooks)
+#   UAZAPI_TOKEN             instance token, same caveat as above
+# ---------------------------------------------------------------------------

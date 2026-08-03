@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rastreio WPP</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root {
+    --bg: #f7f7f8;
+    --card: #ffffff;
+    --border: #e4e4e7;
+    --text: #18181b;
+    --dim: #52525b;
+    --muted: #a1a1aa;
+    --accent-green:  #16a34a;
+    --accent-blue:   #2563eb;
+    --accent-amber:  #d97706;
+    --accent-purple: #7c3aed;
+    --accent-red:    #dc2626;
+  }
+  html, body { background: var(--bg); color: var(--text); font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .mono { font-family: "JetBrains Mono", "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; }
+  .dash-tab { padding: 0.5rem 0.875rem; font-size: 0.875rem; border-bottom: 2px solid transparent; color: var(--dim); cursor: pointer; }
+  .dash-tab.active { color: var(--text); border-color: var(--accent-green); font-weight: 600; }
+  .row-hover:hover { background: #fafafa; }
+  .badge { display: inline-block; padding: 0.125rem 0.5rem; border-radius: 999px; font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
+  .badge-lead { background: #e4e4e7; color: #3f3f46; }
+  .badge-qualified { background: #dbeafe; color: #1e40af; }
+  .badge-scheduled { background: #fef3c7; color: #92400e; }
+  .badge-sale { background: #dcfce7; color: #166534; }
+  .badge-lost { background: #fee2e2; color: #991b1b; }
+  .action-btn { font-size: 0.75rem; padding: 0.25rem 0.5rem; border-radius: 6px; border: 1px solid var(--border); background: white; cursor: pointer; }
+  .action-btn:hover { background: #f4f4f5; }
+  .fade-in { animation: fadeIn 0.3s ease-out; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+</style>
+</head>
+<body>
+
+<div id="app" class="hidden min-h-screen">
+  <header class="border-b border-[color:var(--border)] bg-white">
+    <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-lg bg-[color:var(--accent-green)] text-white flex items-center justify-center font-bold">W</div>
+        <div>
+          <div class="font-semibold">Rastreio WPP</div>
+          <div class="text-xs text-[color:var(--muted)]">Rastreamento de campanhas Clique-para-WhatsApp</div>
+        </div>
+      </div>
+      <label class="flex items-center gap-2 text-xs text-[color:var(--dim)]">
+        <input type="checkbox" id="auto-refresh" class="rounded">
+        auto-refresh 10s
+      </label>
+    </div>
+    <div class="max-w-7xl mx-auto px-6 flex gap-1">
+      <div class="dash-tab active" data-tab="conversas">Conversas</div>
+      <div class="dash-tab" data-tab="eventos">Eventos</div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-6 py-6 space-y-6">
+
+    <!-- Conversas tab -->
+    <section id="tab-conversas" class="fade-in">
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4" id="status-counts">
+        <!-- filled by JS -->
+      </div>
+
+      <div class="card p-4">
+        <div class="flex items-center gap-3 mb-3">
+          <input id="conversas-search" type="text" placeholder="Buscar por telefone" class="border border-[color:var(--border)] rounded-lg px-3 py-1.5 text-sm flex-1 max-w-xs">
+          <label class="flex items-center gap-2 text-sm text-[color:var(--dim)]">
+            <input type="checkbox" id="conversas-only-ctwa" class="rounded"> só CTWA
+          </label>
+          <button class="action-btn ml-auto" onclick="loadContacts()">Atualizar</button>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-xs text-[color:var(--muted)] uppercase tracking-wider border-b border-[color:var(--border)]">
+                <th class="py-2 pr-3">Telefone</th>
+                <th class="py-2 pr-3">Nome</th>
+                <th class="py-2 pr-3">Status</th>
+                <th class="py-2 pr-3">Anúncio</th>
+                <th class="py-2 pr-3">Primeira mensagem</th>
+                <th class="py-2 pr-3">Recebido</th>
+                <th class="py-2 pr-3">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="conversas-body" class="mono"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Eventos tab -->
+    <section id="tab-eventos" class="fade-in hidden">
+      <div class="card p-4">
+        <div class="flex items-center gap-3 mb-3">
+          <input id="eventos-search" type="text" placeholder="Buscar por telefone" class="border border-[color:var(--border)] rounded-lg px-3 py-1.5 text-sm flex-1 max-w-xs">
+          <label class="flex items-center gap-2 text-sm text-[color:var(--dim)]">
+            <input type="checkbox" id="eventos-only-ctwa" class="rounded"> só CTWA
+          </label>
+          <button class="action-btn ml-auto" onclick="loadEvents()">Atualizar</button>
+        </div>
+        <div class="text-xs text-[color:var(--muted)] mb-2">Cada webhook do uazapi capturado, mensagem por mensagem.</div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-xs text-[color:var(--muted)] uppercase tracking-wider border-b border-[color:var(--border)]">
+                <th class="py-2 pr-3">ID</th>
+                <th class="py-2 pr-3">Recebido</th>
+                <th class="py-2 pr-3">Nome</th>
+                <th class="py-2 pr-3">Telefone</th>
+                <th class="py-2 pr-3">Tipo</th>
+                <th class="py-2 pr-3">Evento</th>
+                <th class="py-2 pr-3">CAPI</th>
+              </tr>
+            </thead>
+            <tbody id="eventos-body" class="mono"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- Auth gate -->
+<div id="auth-gate" class="min-h-screen flex items-center justify-center">
+  <div class="card p-6 w-full max-w-sm">
+    <div class="font-semibold mb-1">Rastreio WPP</div>
+    <div class="text-sm text-[color:var(--dim)] mb-4">Cole o <code>DASH_KEY</code> configurado nas variáveis de ambiente do Cloudflare.</div>
+    <input id="auth-input" type="password" placeholder="DASH_KEY" class="w-full border border-[color:var(--border)] rounded-lg px-3 py-2 text-sm mb-3 font-mono">
+    <button id="auth-submit" class="w-full bg-[color:var(--accent-green)] text-white rounded-lg py-2 text-sm font-semibold">Entrar</button>
+    <div id="auth-error" class="text-xs text-red-600 mt-2 hidden">Chave inválida ou sem permissão.</div>
+  </div>
+</div>
+
+<!-- Details modal (raw payload inspector for an Eventos row) -->
+<div id="details-modal" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" onclick="if(event.target===this) closeDetails()">
+  <div class="card p-5 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+    <div class="flex items-center justify-between mb-3">
+      <div class="font-semibold">Payload bruto</div>
+      <button class="action-btn" onclick="closeDetails()">Fechar</button>
+    </div>
+    <pre id="details-content" class="text-xs bg-[color:var(--bg)] p-3 rounded-lg overflow-x-auto"></pre>
+  </div>
+</div>
+
+<script>
+  let key = new URLSearchParams(location.search).get('key') || sessionStorage.getItem('dashKey') || '';
+  let autoRefreshTimer = null;
+
+  async function tryAuth(k) {
+    const res = await fetch(`/api/whatsapp-contacts?key=${encodeURIComponent(k)}&limit=1`);
+    return res.status !== 401;
+  }
+
+  async function boot() {
+    if (key && await tryAuth(key)) {
+      sessionStorage.setItem('dashKey', key);
+      document.getElementById('auth-gate').classList.add('hidden');
+      document.getElementById('app').classList.remove('hidden');
+      loadContacts();
+      loadEvents();
+    } else {
+      document.getElementById('auth-gate').classList.remove('hidden');
+    }
+  }
+
+  document.getElementById('auth-submit').addEventListener('click', async () => {
+    const k = document.getElementById('auth-input').value.trim();
+    if (await tryAuth(k)) {
+      key = k;
+      boot();
+    } else {
+      document.getElementById('auth-error').classList.remove('hidden');
+    }
+  });
+
+  document.querySelectorAll('.dash-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.dash-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      const target = tab.dataset.tab;
+      document.getElementById('tab-conversas').classList.toggle('hidden', target !== 'conversas');
+      document.getElementById('tab-eventos').classList.toggle('hidden', target !== 'eventos');
+    });
+  });
+
+  document.getElementById('auto-refresh').addEventListener('change', (e) => {
+    if (e.target.checked) {
+      autoRefreshTimer = setInterval(() => { loadContacts(); loadEvents(); }, 10000);
+    } else {
+      clearInterval(autoRefreshTimer);
+    }
+  });
+
+  const STATUS_LABELS = { lead: 'Lead', qualified: 'Qualificado', scheduled: 'Agendado', sale: 'Venda', lost: 'Perdido' };
+
+  async function loadContacts() {
+    const search = document.getElementById('conversas-search').value.trim();
+    const onlyCtwa = document.getElementById('conversas-only-ctwa').checked ? '1' : '0';
+    const params = new URLSearchParams({ key, only_ctwa: onlyCtwa });
+    if (search) params.set('search', search);
+    const res = await fetch(`/api/whatsapp-contacts?${params}`);
+    const data = await res.json();
+
+    const counts = {};
+    (data.counts_by_status || []).forEach(c => counts[c.status] = c.count);
+    const countsEl = document.getElementById('status-counts');
+    countsEl.innerHTML = Object.keys(STATUS_LABELS).map(s => `
+      <div class="card p-3">
+        <div class="text-xs text-[color:var(--muted)] uppercase tracking-wider">${STATUS_LABELS[s]}</div>
+        <div class="text-xl font-semibold mono mt-1">${counts[s] || 0}</div>
+      </div>
+    `).join('');
+
+    const body = document.getElementById('conversas-body');
+    body.innerHTML = (data.contacts || []).map(c => `
+      <tr class="row-hover border-b border-[color:var(--border)]">
+        <td class="py-2 pr-3">${c.phone}</td>
+        <td class="py-2 pr-3">${escapeHtml(c.push_name || '—')}</td>
+        <td class="py-2 pr-3"><span class="badge badge-${c.status}">${STATUS_LABELS[c.status] || c.status}</span></td>
+        <td class="py-2 pr-3">${c.is_ctwa ? `<span title="${escapeHtml(c.ad_headline || '')}">CTWA ✓</span>` : '—'}</td>
+        <td class="py-2 pr-3 max-w-xs truncate" title="${escapeHtml(c.first_message_text || '')}">${escapeHtml(c.first_message_text || '—')}</td>
+        <td class="py-2 pr-3">${fmtTime(c.first_message_at)}</td>
+        <td class="py-2 pr-3 space-x-1 whitespace-nowrap">
+          <button class="action-btn" onclick="markStatus('${c.wa_id}','qualified')">Qualificado</button>
+          <button class="action-btn" onclick="markStatus('${c.wa_id}','scheduled')">Agendado</button>
+          <button class="action-btn" onclick="markSale('${c.wa_id}')">Venda</button>
+          <button class="action-btn" onclick="markStatus('${c.wa_id}','lost')">Perdido</button>
+        </td>
+      </tr>
+    `).join('') || `<tr><td colspan="7" class="py-6 text-center text-[color:var(--muted)]">Nenhuma conversa ainda.</td></tr>`;
+  }
+
+  async function loadEvents() {
+    const search = document.getElementById('eventos-search').value.trim();
+    const onlyCtwa = document.getElementById('eventos-only-ctwa').checked ? '1' : '0';
+    const params = new URLSearchParams({ key, only_ctwa: onlyCtwa });
+    if (search) params.set('search', search);
+    const res = await fetch(`/api/whatsapp-events?${params}`);
+    const data = await res.json();
+
+    const body = document.getElementById('eventos-body');
+    body.innerHTML = (data.events || []).map(e => `
+      <tr class="row-hover border-b border-[color:var(--border)] cursor-pointer" onclick='openDetails(${JSON.stringify(e.raw_payload || "null")})'>
+        <td class="py-2 pr-3">#${e.id}</td>
+        <td class="py-2 pr-3">${fmtTime(e.created_at)}</td>
+        <td class="py-2 pr-3">${escapeHtml(e.push_name || '—')}</td>
+        <td class="py-2 pr-3">${e.wa_id ? e.wa_id.replace(/@.*/, '') : '—'}</td>
+        <td class="py-2 pr-3"><span class="badge badge-lead">${e.message_type || '—'}</span></td>
+        <td class="py-2 pr-3">${e.event_name}</td>
+        <td class="py-2 pr-3">${e.sent_to_meta ? (e.meta_response_ok ? '✅' : '❌ ' + e.meta_status_code) : '—'}</td>
+      </tr>
+    `).join('') || `<tr><td colspan="7" class="py-6 text-center text-[color:var(--muted)]">Nenhum evento ainda. Configure o webhook no painel do uazapi.</td></tr>`;
+  }
+
+  async function markStatus(waId, newStatus, value, currency) {
+    const body = { wa_id: waId, new_status: newStatus };
+    if (value != null) { body.value = value; body.currency = currency || 'BRL'; }
+    const res = await fetch('/api/whatsapp-status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-dash-key': key },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      alert('Erro ao marcar status: ' + (await res.text()));
+      return;
+    }
+    loadContacts();
+  }
+
+  function markSale(waId) {
+    const value = prompt('Valor da venda (R$):', '');
+    if (value === null) return;
+    markStatus(waId, 'sale', value ? parseFloat(value.replace(',', '.')) : null, 'BRL');
+  }
+
+  function openDetails(rawPayloadJson) {
+    if (!rawPayloadJson || rawPayloadJson === 'null') return;
+    let pretty;
+    try { pretty = JSON.stringify(JSON.parse(rawPayloadJson), null, 2); } catch (e) { pretty = rawPayloadJson; }
+    document.getElementById('details-content').textContent = pretty;
+    document.getElementById('details-modal').classList.remove('hidden');
+  }
+  function closeDetails() {
+    document.getElementById('details-modal').classList.add('hidden');
+  }
+
+  function fmtTime(unixSeconds) {
+    if (!unixSeconds) return '—';
+    return new Date(unixSeconds * 1000).toLocaleString('pt-BR');
+  }
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
+
+  boot();
+</script>
+
+</body>
+</html>
