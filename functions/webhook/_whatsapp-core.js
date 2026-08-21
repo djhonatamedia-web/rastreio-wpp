@@ -3,21 +3,23 @@
 // split in krob-tracking-stack-main's _core.js, but for a stateful
 // conversation lifecycle instead of a one-shot purchase event.
 //
-// *** FASE 0 STATUS: payload shape is UNCONFIRMED. ***
-// uazapi's exact webhook envelope (top-level event-type field name, where
-// the Baileys message object is nested, whether it's a single message or an
-// array) has not been observed against a real webhook yet. Every field
-// extraction below is a best-effort guess based on (a) the Baileys library's
-// known proto shape (confirmed via public docs: message.contextInfo
-// .externalAdReplyInfo.ctwaClid) and (b) the KROB WhatsApp Tracker reference
-// screenshot, which shows raw Baileys message-type strings (Conversation,
-// ExtendedTextMessage, ImageMessage, ReactionMessage, PollUpdateMessage)
-// surfacing unmodified — meaning uazapi does not rewrite/flatten them.
+// *** FASE 0 STATUS: envelope confirmed, ctwa_clid still unconfirmed. ***
+// Confirmed against 49 real webhook payloads captured in production
+// (docs/payload-uazapi.md): uazapi does NOT forward the raw Baileys proto —
+// it sends its own flattened envelope (`{ EventType, chat, message }`, with
+// fields like message.chatid/fromMe/isGroup/senderName/text/messageType at
+// the top level of `message`). extractMessage() below matches that
+// confirmed shape.
+//
+// Still open: none of the 49 captured payloads came from an actual ad
+// click, so we don't yet know where (or whether) uazapi surfaces the CTWA
+// attribution id. `message.track_id`/`message.track_source` are candidates
+// (present but empty on all organic messages seen so far) — to be confirmed
+// against a real ad-click test message, then wired into ctwaClid below.
 //
 // The one guarantee: `raw_payload` is ALWAYS persisted verbatim, regardless
-// of whether the guesses below extract anything usefully. Once a real
-// webhook is captured (see docs/payload-uazapi.md), come back and correct
-// every block marked "FASE 0 GUESS" against the actual JSON.
+// of whether extraction below finds anything. That's what let us recover
+// the real envelope shape after the fact without needing a fresh capture.
 // -----------------------------------------------------------------------------
 
 import { sendWhatsAppEventToMeta } from './_whatsapp-capi.js';
@@ -144,53 +146,35 @@ async function logRawEvent({ env, waId, eventName, eventId, eventTime, messageTy
     .run();
 }
 
-// FASE 0 GUESS — replace this whole function once a real uazapi payload has
-// been captured (docs/payload-uazapi.md). Returns null if the shape isn't
-// recognized at all (e.g. a status/ack/connection event, not a message).
+// Confirmed against real uazapi traffic (docs/payload-uazapi.md). Returns
+// null if the shape isn't recognized at all (e.g. a status/ack/connection
+// event, not a "messages" event, or missing the fields we need).
 function extractMessage(raw) {
-  // uazapi envelope: try the common field names unofficial gateways use.
-  // Adjust once confirmed.
-  const msg = raw?.message || raw?.data?.message || raw?.messages?.[0] || null;
-  if (!msg) return null;
+  const msg = raw?.message;
+  if (!msg || !msg.chatid) return null;
 
-  const key = msg.key || {};
-  const remoteJid = key.remoteJid || raw?.chatid || null;
-  if (!remoteJid) return null;
+  const waId = msg.chatid; // e.g. "5511999998888@s.whatsapp.net" or "...@g.us" — always the real phone, even when `sender`/`chatlid` use the newer @lid format
+  const phone = waId.replace(/@.*/, '');
 
-  const isGroup = remoteJid.endsWith('@g.us');
-  const fromMe = !!key.fromMe;
-  const waId = remoteJid;
-  const phone = remoteJid.replace(/@.*/, '');
-
-  const content = msg.message || {};
-  const messageType = Object.keys(content)[0] || null; // e.g. "conversation", "extendedTextMessage"
-
-  const text =
-    content.conversation ||
-    content.extendedTextMessage?.text ||
-    content.imageMessage?.caption ||
-    content.videoMessage?.caption ||
-    null;
-
-  const contextInfo =
-    content.extendedTextMessage?.contextInfo ||
-    content.imageMessage?.contextInfo ||
-    null;
-  const adReply = contextInfo?.externalAdReplyInfo || null;
+  // ctwa_clid: NOT YET CONFIRMED. None of the 49 real payloads captured so
+  // far came from an ad click. `track_id`/`track_source` are candidates
+  // (seen present-but-empty on organic messages) — left unwired until a
+  // real ad-click test confirms where the attribution id actually lands.
+  const ctwaClid = null;
 
   return {
     waId,
     phone,
-    isGroup,
-    fromMe,
-    pushName: msg.pushName || null,
-    messageType,
-    text,
-    timestamp: msg.messageTimestamp ? Number(msg.messageTimestamp) : null,
-    ctwaClid: adReply?.ctwaClid || null,
-    adSourceId: adReply?.sourceId || null,
-    adHeadline: adReply?.title || null,
-    adSourceUrl: adReply?.sourceUrl || null,
-    adMediaType: adReply?.mediaType || null,
+    isGroup: typeof msg.isGroup === 'boolean' ? msg.isGroup : waId.endsWith('@g.us'),
+    fromMe: !!msg.fromMe,
+    pushName: msg.senderName || null,
+    messageType: msg.messageType || null,
+    text: msg.text || null,
+    timestamp: msg.messageTimestamp ? Math.floor(Number(msg.messageTimestamp) / 1000) : null,
+    ctwaClid,
+    adSourceId: null,
+    adHeadline: null,
+    adSourceUrl: null,
+    adMediaType: null,
   };
 }

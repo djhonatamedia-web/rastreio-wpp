@@ -20,13 +20,18 @@ Cloudflare account/D1 do cliente, sem backend compartilhado.
 
 ## Status atual: Fase 0 (validação de payload) — ver `docs/payload-uazapi.md`
 
-O formato exato do webhook do uazapi (e se ele repassa `ctwa_clid`, o campo
-crítico de atribuição) **ainda não foi confirmado contra um payload real**.
-`functions/webhook/_whatsapp-core.js` tem extração best-effort marcada como
-`FASE 0 GUESS` nos comentários. Antes de qualquer coisa nova, rodar o teste
-end-to-end descrito em `docs/payload-uazapi.md` e corrigir `extractMessage()`
-com o payload real. `raw_payload` é sempre gravado independente do parsing
-funcionar, então nada se perde nesse meio tempo.
+O envelope real do webhook do uazapi **já foi confirmado** (recuperado de 49
+webhooks reais gravados em produção — `raw_payload` sempre é persistido
+independente do parsing funcionar, foi assim que descobrimos o formato real
+depois do fato). `extractMessage()` em `functions/webhook/_whatsapp-core.js`
+já usa esse formato confirmado.
+
+O que falta: se `ctwa_clid` (o campo crítico de atribuição ao anúncio)
+aparece no payload. Nenhum dos 49 payloads capturados até agora veio de um
+clique real em anúncio — só a campanha de teste real vai responder isso.
+Até lá, `ctwaClid` fica fixo em `null` em `extractMessage()` (rastreamento
+de conversas e dashboard funcionam normalmente; só o fan-out automático pro
+Meta CAPI fica pendente).
 
 ## Identificador crítico
 
