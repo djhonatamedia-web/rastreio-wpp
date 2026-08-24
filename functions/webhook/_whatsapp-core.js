@@ -3,19 +3,19 @@
 // split in krob-tracking-stack-main's _core.js, but for a stateful
 // conversation lifecycle instead of a one-shot purchase event.
 //
-// *** FASE 0 STATUS: envelope confirmed, ctwa_clid still unconfirmed. ***
-// Confirmed against 49 real webhook payloads captured in production
+// *** FASE 0 STATUS: CLOSED — envelope and ctwa_clid both confirmed. ***
+// Confirmed against real webhook payloads captured in production
 // (docs/payload-uazapi.md): uazapi does NOT forward the raw Baileys proto —
 // it sends its own flattened envelope (`{ EventType, chat, message }`, with
 // fields like message.chatid/fromMe/isGroup/senderName/text/messageType at
 // the top level of `message`). extractMessage() below matches that
 // confirmed shape.
 //
-// Still open: none of the 49 captured payloads came from an actual ad
-// click, so we don't yet know where (or whether) uazapi surfaces the CTWA
-// attribution id. `message.track_id`/`message.track_source` are candidates
-// (present but empty on all organic messages seen so far) — to be confirmed
-// against a real ad-click test message, then wired into ctwaClid below.
+// ctwa_clid confirmed 2026-08 against 3 real ad-click leads: uazapi passes
+// the untouched Baileys ad-context block through at
+// `message.content.contextInfo.externalAdReply` (NOT `track_id`/
+// `track_source`, which stayed empty on every message, ad-originated or
+// not — those were a dead end).
 //
 // The one guarantee: `raw_payload` is ALWAYS persisted verbatim, regardless
 // of whether extraction below finds anything. That's what let us recover
@@ -156,11 +156,15 @@ function extractMessage(raw) {
   const waId = msg.chatid; // e.g. "5511999998888@s.whatsapp.net" or "...@g.us" — always the real phone, even when `sender`/`chatlid` use the newer @lid format
   const phone = waId.replace(/@.*/, '');
 
-  // ctwa_clid: NOT YET CONFIRMED. None of the 49 real payloads captured so
-  // far came from an ad click. `track_id`/`track_source` are candidates
-  // (seen present-but-empty on organic messages) — left unwired until a
-  // real ad-click test confirms where the attribution id actually lands.
-  const ctwaClid = null;
+  // ctwa_clid: CONFIRMED (real ad-click test, 2026-08). Not at the top
+  // level of `message` — uazapi nests the untouched Baileys ad-context
+  // block at `message.content.contextInfo.externalAdReply`. Present on
+  // every message type seen so far that originated from the ad click
+  // (first text message, and the WhatsApp Flow form-submission reply),
+  // not just the very first message — so no special-casing needed beyond
+  // reading it whenever it's there.
+  const adReply = msg.content?.contextInfo?.externalAdReply || null;
+  const ctwaClid = adReply?.ctwaClid || null;
 
   return {
     waId,
@@ -172,9 +176,9 @@ function extractMessage(raw) {
     text: msg.text || null,
     timestamp: msg.messageTimestamp ? Math.floor(Number(msg.messageTimestamp) / 1000) : null,
     ctwaClid,
-    adSourceId: null,
-    adHeadline: null,
-    adSourceUrl: null,
-    adMediaType: null,
+    adSourceId: adReply?.sourceID || null,
+    adHeadline: adReply?.title || null,
+    adSourceUrl: adReply?.sourceURL || null,
+    adMediaType: adReply?.mediaType != null ? String(adReply.mediaType) : null,
   };
 }

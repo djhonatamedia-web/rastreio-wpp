@@ -18,20 +18,16 @@ Espírito de template reutilizável, igual ao `krob-tracking-stack-main`
 (projeto irmão, no mesmo workspace) — cada implantação roda no próprio
 Cloudflare account/D1 do cliente, sem backend compartilhado.
 
-## Status atual: Fase 0 (validação de payload) — ver `docs/payload-uazapi.md`
+## Status atual: Fase 0 fechada — ver `docs/payload-uazapi.md`
 
-O envelope real do webhook do uazapi **já foi confirmado** (recuperado de 49
-webhooks reais gravados em produção — `raw_payload` sempre é persistido
-independente do parsing funcionar, foi assim que descobrimos o formato real
-depois do fato). `extractMessage()` em `functions/webhook/_whatsapp-core.js`
-já usa esse formato confirmado.
-
-O que falta: se `ctwa_clid` (o campo crítico de atribuição ao anúncio)
-aparece no payload. Nenhum dos 49 payloads capturados até agora veio de um
-clique real em anúncio — só a campanha de teste real vai responder isso.
-Até lá, `ctwaClid` fica fixo em `null` em `extractMessage()` (rastreamento
-de conversas e dashboard funcionam normalmente; só o fan-out automático pro
-Meta CAPI fica pendente).
+O envelope real do webhook do uazapi e o campo `ctwa_clid` **já foram
+confirmados** contra leads reais da primeira campanha de teste. `ctwa_clid`
+não vem em `message.track_id`/`track_source` (caminho morto) — vem em
+`message.content.contextInfo.externalAdReply.ctwaClid`, o bloco de contexto
+de anúncio do Baileys passado sem modificação pelo uazapi.
+`extractMessage()` em `functions/webhook/_whatsapp-core.js` já extrai
+daí — rastreamento, dashboard e fan-out automático pro Meta CAPI estão
+todos operacionais.
 
 ## Identificador crítico
 
