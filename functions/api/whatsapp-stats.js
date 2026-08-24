@@ -1,4 +1,4 @@
-// GET /api/whatsapp-stats?key=...
+// GET /api/whatsapp-stats?key=...&days=30
 //
 // Dashboard "Visão Geral" tab — funil (anúncios vs orgânico), evolução
 // diária e quebra por anúncio. Read-only, mesmo padrão de auth por query
@@ -8,6 +8,12 @@
 // mais avançado já alcançado (lead < qualified < scheduled < sale), não
 // como histórico de transições — é o mesmo modelo que os botões do
 // dashboard já usam. `lost` é contado à parte, não drena o funil.
+//
+// `days` recorta por coorte: funil e "por anúncio" só contam contatos
+// CRIADOS na janela (últimos N dias); a evolução diária é por atividade
+// (eventos de mudança de estágio contam no dia em que aconteceram, mesmo
+// que o contato seja mais antigo que a janela) — é a leitura mais útil
+// pra um gráfico "o que aconteceu por dia".
 
 export async function onRequestGet(context) {
   const { request, env } = context;
@@ -17,6 +23,9 @@ export async function onRequestGet(context) {
   if (!env.DASH_KEY || key !== env.DASH_KEY) {
     return json({ error: 'Unauthorized' }, 401);
   }
+
+  const days = clampInt(url.searchParams.get('days'), 30, 1, 365);
+  const cutoff = Math.floor(Date.now() / 1000) - days * 86400;
 
   try {
     const funnelRows = await env.DB.prepare(`
@@ -28,23 +37,25 @@ export async function onRequestGet(context) {
         SUM(CASE WHEN status = 'sale' THEN 1 ELSE 0 END) as sale,
         SUM(CASE WHEN status = 'lost' THEN 1 ELSE 0 END) as lost
       FROM whatsapp_contacts
+      WHERE created_at >= ?
       GROUP BY is_ctwa
-    `).all();
+    `).bind(cutoff).all();
 
     const leadsPerDay = await env.DB.prepare(`
       SELECT date(created_at, 'unixepoch') as day, COUNT(*) as leads
       FROM whatsapp_contacts
+      WHERE created_at >= ?
       GROUP BY day
       ORDER BY day
-    `).all();
+    `).bind(cutoff).all();
 
     const stagesPerDay = await env.DB.prepare(`
       SELECT date(created_at, 'unixepoch') as day, event_name, COUNT(DISTINCT wa_id) as count
       FROM whatsapp_events
-      WHERE event_name IN ('QualifiedLead', 'Schedule', 'Purchase')
+      WHERE event_name IN ('QualifiedLead', 'Schedule', 'Purchase') AND created_at >= ?
       GROUP BY day, event_name
       ORDER BY day
-    `).all();
+    `).bind(cutoff).all();
 
     const byAd = await env.DB.prepare(`
       SELECT
@@ -53,11 +64,11 @@ export async function onRequestGet(context) {
         SUM(CASE WHEN status IN ('qualified','scheduled','sale') THEN 1 ELSE 0 END) as qualified,
         SUM(CASE WHEN status = 'sale' THEN 1 ELSE 0 END) as sale
       FROM whatsapp_contacts
-      WHERE is_ctwa = 1 AND ad_source_id IS NOT NULL
+      WHERE is_ctwa = 1 AND ad_source_id IS NOT NULL AND created_at >= ?
       GROUP BY ad_source_id
       ORDER BY leads DESC
       LIMIT 20
-    `).all();
+    `).bind(cutoff).all();
 
     const timeseries = buildTimeseries(leadsPerDay.results || [], stagesPerDay.results || []);
 
@@ -106,4 +117,10 @@ function json(body, status = 200) {
     status,
     headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
   });
+}
+
+function clampInt(raw, fallback, min, max) {
+  const n = parseInt(raw || '', 10);
+  if (Number.isNaN(n)) return fallback;
+  return Math.max(min, Math.min(max, n));
 }

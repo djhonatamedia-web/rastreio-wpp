@@ -34,6 +34,7 @@
   .badge-lost { background: #fee2e2; color: #991b1b; }
   .action-btn { font-size: 0.75rem; padding: 0.25rem 0.5rem; border-radius: 6px; border: 1px solid var(--border); background: white; cursor: pointer; }
   .action-btn:hover { background: #f4f4f5; }
+  .action-btn.active-range { background: var(--accent-green); color: white; border-color: var(--accent-green); }
   .fade-in { animation: fadeIn 0.3s ease-out; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
   .funnel-row { display: grid; grid-template-columns: 5.5rem 1fr 3rem; align-items: center; gap: 0.5rem; }
@@ -71,15 +72,25 @@
 
     <!-- Visão Geral tab -->
     <section id="tab-visao-geral" class="fade-in space-y-6">
-      <div class="grid md:grid-cols-2 gap-4">
-        <div class="card p-4">
-          <div class="font-semibold text-sm mb-3">Funil — Anúncios</div>
-          <div id="funnel-ads" class="space-y-2"></div>
+      <div class="flex items-center gap-2">
+        <span class="text-xs text-[color:var(--muted)] uppercase tracking-wider">Período</span>
+        <div id="range-selector" class="flex gap-1">
+          <button class="action-btn" data-days="7">7d</button>
+          <button class="action-btn" data-days="14">14d</button>
+          <button class="action-btn active-range" data-days="30">30d</button>
+          <button class="action-btn" data-days="60">60d</button>
         </div>
-        <div class="card p-4">
-          <div class="font-semibold text-sm mb-3">Funil — Orgânico</div>
-          <div id="funnel-organic" class="space-y-2"></div>
+      </div>
+
+      <div class="card p-4">
+        <div class="flex items-center justify-between mb-3">
+          <div class="font-semibold text-sm">Funil</div>
+          <div class="flex items-center gap-3 text-xs text-[color:var(--dim)]">
+            <span class="flex items-center gap-1"><span class="inline-block w-2.5 h-2.5 rounded-sm" style="background:var(--accent-blue)"></span>Anúncios</span>
+            <span class="flex items-center gap-1"><span class="inline-block w-2.5 h-2.5 rounded-sm" style="background:var(--muted)"></span>Orgânico</span>
+          </div>
         </div>
+        <div id="funnel" class="space-y-2"></div>
       </div>
 
       <div class="card p-4">
@@ -250,25 +261,32 @@
   let evolutionChart = null;
 
   const FUNNEL_STAGES = [
-    { key: 'total', label: 'Leads', color: 'var(--accent-blue)' },
-    { key: 'qualified', label: 'Qualificados', color: 'var(--accent-purple)' },
-    { key: 'scheduled', label: 'Agendados', color: 'var(--accent-amber)' },
-    { key: 'sale', label: 'Vendas', color: 'var(--accent-green)' },
+    { key: 'total', label: 'Leads' },
+    { key: 'qualified', label: 'Qualificados' },
+    { key: 'scheduled', label: 'Agendados' },
+    { key: 'sale', label: 'Vendas' },
   ];
 
-  function renderFunnel(elId, funnel) {
-    const top = funnel.total || 0;
-    document.getElementById(elId).innerHTML = FUNNEL_STAGES.map(stage => {
-      const value = funnel[stage.key] || 0;
-      const pct = top ? Math.round((value / top) * 100) : 0;
+  function renderFunnel(ads, organic) {
+    const top = (ads.total || 0) + (organic.total || 0);
+    const lost = (ads.lost || 0) + (organic.lost || 0);
+    document.getElementById('funnel').innerHTML = FUNNEL_STAGES.map(stage => {
+      const a = ads[stage.key] || 0;
+      const o = organic[stage.key] || 0;
+      const total = a + o;
+      const aPct = top ? (a / top) * 100 : 0;
+      const oPct = top ? (o / top) * 100 : 0;
       return `
         <div class="funnel-row">
           <div class="text-xs text-[color:var(--dim)]">${stage.label}</div>
-          <div class="funnel-track"><div class="funnel-fill" style="width:${pct}%;background:${stage.color}"></div></div>
-          <div class="text-sm font-semibold mono text-right">${value}</div>
+          <div class="funnel-track flex">
+            <div class="h-full" style="width:${aPct}%;background:var(--accent-blue)"></div>
+            <div class="h-full" style="width:${oPct}%;background:var(--muted)"></div>
+          </div>
+          <div class="text-sm font-semibold mono text-right" title="${a} anúncios · ${o} orgânico">${total}</div>
         </div>
       `;
-    }).join('') + (funnel.lost ? `<div class="text-xs text-[color:var(--muted)] mt-1">${funnel.lost} perdido(s)</div>` : '');
+    }).join('') + (lost ? `<div class="text-xs text-[color:var(--muted)] mt-1">${lost} perdido(s)</div>` : '');
   }
 
   function renderEvolutionChart(timeseries) {
@@ -312,15 +330,25 @@
     }).join('') || `<tr><td colspan="5" class="py-6 text-center text-[color:var(--muted)]">Nenhum lead de anúncio ainda.</td></tr>`;
   }
 
+  let statsRangeDays = 30;
+
   async function loadStats() {
-    const res = await fetch(`/api/whatsapp-stats?key=${encodeURIComponent(key)}`);
+    const res = await fetch(`/api/whatsapp-stats?key=${encodeURIComponent(key)}&days=${statsRangeDays}`);
     if (!res.ok) return;
     const data = await res.json();
-    renderFunnel('funnel-ads', data.funnel.ads);
-    renderFunnel('funnel-organic', data.funnel.organic);
+    renderFunnel(data.funnel.ads, data.funnel.organic);
     renderEvolutionChart(data.timeseries || []);
     renderByAd(data.by_ad || []);
   }
+
+  document.querySelectorAll('#range-selector button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#range-selector button').forEach(b => b.classList.remove('active-range'));
+      btn.classList.add('active-range');
+      statsRangeDays = Number(btn.dataset.days);
+      loadStats();
+    });
+  });
 
   async function loadContacts() {
     const search = document.getElementById('conversas-search').value.trim();
