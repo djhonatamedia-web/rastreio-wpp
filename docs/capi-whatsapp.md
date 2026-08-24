@@ -1,10 +1,13 @@
 # Meta Conversions API — eventos de WhatsApp (CTWA)
 
 Referência de formato para eventos `business_messaging`, usados por
-`functions/webhook/_whatsapp-capi.js`. Confirmado via documentação/pesquisa
-pública em 2026-08-03 — validar contra a resposta real do Events Manager na
-Fase 0 antes de considerar 100% travado (especialmente qual ID usar como
-`{PIXEL_ID}` no endpoint).
+`functions/webhook/_whatsapp-capi.js`. Formato confirmado em produção
+(2026-08): `QualifiedLead`, `Schedule`, `Purchase`, `LeadSubmitted` — todos
+aceitos pela Meta (`200`, `events_received: 1`). **`'Lead'` como
+`event_name` literal é REJEITADO** pela Meta pra `business_messaging`
+(`400`, `error_subcode 2804066`, mensagem sugere `'LeadSubmitted'` como
+alternativa válida) — não é um evento de site normal, tem uma lista própria
+de nomes aceitos.
 
 ## Diferença em relação a um evento normal de site
 
@@ -52,7 +55,7 @@ Ver `config/whatsapp.js` (`STAGE_TO_META_EVENT`):
 
 | Estágio no dashboard | `event_name` enviado |
 |---|---|
-| Lead (automático, primeira mensagem) | `Lead` |
+| Lead (automático, primeira mensagem) | `LeadSubmitted` |
 | Qualificado | `QualifiedLead` |
 | Agendado | `Schedule` |
 | Venda | `Purchase` (com `custom_data.value`) |

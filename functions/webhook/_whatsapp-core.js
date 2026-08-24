@@ -100,7 +100,7 @@ export async function processWhatsAppMessage({ raw, env, context }) {
   }
 
   const { payload, response, skipped } = await sendWhatsAppEventToMeta({
-    eventName: 'Lead',
+    eventName: 'LeadSubmitted', // NOT 'Lead' -- Meta rejects that literal name for business_messaging (400, error_subcode 2804066), confirmed 2026-08 in production; Meta's own error suggested this alternative
     ctwaClid: extracted.ctwaClid,
     phone: extracted.phone,
     eventId,
@@ -127,7 +127,7 @@ export async function processWhatsAppMessage({ raw, env, context }) {
       INSERT INTO whatsapp_events (
         wa_id, event_name, event_id, event_time, source, sent_to_meta,
         meta_status_code, meta_response_ok, meta_response_body, meta_payload_sent, created_at
-      ) VALUES (?, 'Lead', ?, ?, 'webhook', 1, ?, ?, ?, ?, ?)
+      ) VALUES (?, 'LeadSubmitted', ?, ?, 'webhook', 1, ?, ?, ?, ?, ?)
     `).bind(
       extracted.waId, eventId, extracted.timestamp || now,
       response.status, response.ok ? 1 : 0, responseBody, payload, now
