@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Rastreio WPP</title>
 <script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <style>
   :root {
     --bg: #f7f7f8;
@@ -35,6 +36,11 @@
   .action-btn:hover { background: #f4f4f5; }
   .fade-in { animation: fadeIn 0.3s ease-out; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  .funnel-row { display: grid; grid-template-columns: 5.5rem 1fr 3rem; align-items: center; gap: 0.5rem; }
+  .funnel-track { height: 1.5rem; border-radius: 6px; background: #f4f4f5; overflow: hidden; }
+  .funnel-fill { height: 100%; border-radius: 6px; transition: width 0.4s ease-out; }
+  .ad-thumb { width: 2.25rem; height: 2.25rem; border-radius: 6px; object-fit: cover; background: #f4f4f5; flex-shrink: 0; }
+  .ad-thumb-sm { width: 1.5rem; height: 1.5rem; border-radius: 4px; object-fit: cover; flex-shrink: 0; }
 </style>
 </head>
 <body>
@@ -55,15 +61,53 @@
       </label>
     </div>
     <div class="max-w-7xl mx-auto px-6 flex gap-1">
-      <div class="dash-tab active" data-tab="conversas">Conversas</div>
+      <div class="dash-tab active" data-tab="visao-geral">Visão Geral</div>
+      <div class="dash-tab" data-tab="conversas">Conversas</div>
       <div class="dash-tab" data-tab="eventos">Eventos</div>
     </div>
   </header>
 
   <main class="max-w-7xl mx-auto px-6 py-6 space-y-6">
 
+    <!-- Visão Geral tab -->
+    <section id="tab-visao-geral" class="fade-in space-y-6">
+      <div class="grid md:grid-cols-2 gap-4">
+        <div class="card p-4">
+          <div class="font-semibold text-sm mb-3">Funil — Anúncios</div>
+          <div id="funnel-ads" class="space-y-2"></div>
+        </div>
+        <div class="card p-4">
+          <div class="font-semibold text-sm mb-3">Funil — Orgânico</div>
+          <div id="funnel-organic" class="space-y-2"></div>
+        </div>
+      </div>
+
+      <div class="card p-4">
+        <div class="font-semibold text-sm mb-3">Evolução diária</div>
+        <div style="height: 260px"><canvas id="evolution-chart"></canvas></div>
+      </div>
+
+      <div class="card p-4">
+        <div class="font-semibold text-sm mb-3">Por anúncio</div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-xs text-[color:var(--muted)] uppercase tracking-wider border-b border-[color:var(--border)]">
+                <th class="py-2 pr-3">Anúncio</th>
+                <th class="py-2 pr-3">Leads</th>
+                <th class="py-2 pr-3">Qualificados</th>
+                <th class="py-2 pr-3">Vendas</th>
+                <th class="py-2 pr-3">Conversão</th>
+              </tr>
+            </thead>
+            <tbody id="by-ad-body" class="mono"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
     <!-- Conversas tab -->
-    <section id="tab-conversas" class="fade-in">
+    <section id="tab-conversas" class="fade-in hidden">
       <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4" id="status-counts">
         <!-- filled by JS -->
       </div>
@@ -164,6 +208,7 @@
       sessionStorage.setItem('dashKey', key);
       document.getElementById('auth-gate').classList.add('hidden');
       document.getElementById('app').classList.remove('hidden');
+      loadStats();
       loadContacts();
       loadEvents();
     } else {
@@ -186,6 +231,7 @@
       document.querySelectorAll('.dash-tab').forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
       const target = tab.dataset.tab;
+      document.getElementById('tab-visao-geral').classList.toggle('hidden', target !== 'visao-geral');
       document.getElementById('tab-conversas').classList.toggle('hidden', target !== 'conversas');
       document.getElementById('tab-eventos').classList.toggle('hidden', target !== 'eventos');
     });
@@ -193,7 +239,7 @@
 
   document.getElementById('auto-refresh').addEventListener('change', (e) => {
     if (e.target.checked) {
-      autoRefreshTimer = setInterval(() => { loadContacts(); loadEvents(); }, 10000);
+      autoRefreshTimer = setInterval(() => { loadStats(); loadContacts(); loadEvents(); }, 10000);
     } else {
       clearInterval(autoRefreshTimer);
     }
@@ -201,6 +247,80 @@
 
   const STATUS_LABELS = { lead: 'Lead', qualified: 'Qualificado', scheduled: 'Agendado', sale: 'Venda', lost: 'Perdido' };
   let currentEventsRaw = [];
+  let evolutionChart = null;
+
+  const FUNNEL_STAGES = [
+    { key: 'total', label: 'Leads', color: 'var(--accent-blue)' },
+    { key: 'qualified', label: 'Qualificados', color: 'var(--accent-purple)' },
+    { key: 'scheduled', label: 'Agendados', color: 'var(--accent-amber)' },
+    { key: 'sale', label: 'Vendas', color: 'var(--accent-green)' },
+  ];
+
+  function renderFunnel(elId, funnel) {
+    const top = funnel.total || 0;
+    document.getElementById(elId).innerHTML = FUNNEL_STAGES.map(stage => {
+      const value = funnel[stage.key] || 0;
+      const pct = top ? Math.round((value / top) * 100) : 0;
+      return `
+        <div class="funnel-row">
+          <div class="text-xs text-[color:var(--dim)]">${stage.label}</div>
+          <div class="funnel-track"><div class="funnel-fill" style="width:${pct}%;background:${stage.color}"></div></div>
+          <div class="text-sm font-semibold mono text-right">${value}</div>
+        </div>
+      `;
+    }).join('') + (funnel.lost ? `<div class="text-xs text-[color:var(--muted)] mt-1">${funnel.lost} perdido(s)</div>` : '');
+  }
+
+  function renderEvolutionChart(timeseries) {
+    const labels = timeseries.map(t => t.day.slice(5)); // MM-DD
+    const datasets = [
+      { label: 'Leads', data: timeseries.map(t => t.leads), borderColor: '#2563eb', backgroundColor: '#2563eb22', tension: 0.3 },
+      { label: 'Qualificados', data: timeseries.map(t => t.qualified), borderColor: '#7c3aed', backgroundColor: '#7c3aed22', tension: 0.3 },
+      { label: 'Agendados', data: timeseries.map(t => t.scheduled), borderColor: '#d97706', backgroundColor: '#d9770622', tension: 0.3 },
+      { label: 'Vendas', data: timeseries.map(t => t.sale), borderColor: '#16a34a', backgroundColor: '#16a34a22', tension: 0.3 },
+    ];
+    if (evolutionChart) evolutionChart.destroy();
+    evolutionChart = new Chart(document.getElementById('evolution-chart'), {
+      type: 'line',
+      data: { labels, datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
+        plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } } },
+      },
+    });
+  }
+
+  function renderByAd(rows) {
+    const body = document.getElementById('by-ad-body');
+    body.innerHTML = (rows || []).map(r => {
+      const conv = r.leads ? Math.round((r.qualified / r.leads) * 100) : 0;
+      return `
+        <tr class="row-hover border-b border-[color:var(--border)]">
+          <td class="py-2 pr-3">
+            <div class="flex items-center gap-2 max-w-xs">
+              ${r.ad_thumbnail_url ? `<img class="ad-thumb" src="${escapeHtml(r.ad_thumbnail_url)}" alt="" onerror="this.style.display='none'">` : ''}
+              <span class="truncate" title="${escapeHtml(r.ad_headline || r.ad_source_id)}">${escapeHtml(r.ad_headline || r.ad_source_id)}</span>
+            </div>
+          </td>
+          <td class="py-2 pr-3">${r.leads}</td>
+          <td class="py-2 pr-3">${r.qualified}</td>
+          <td class="py-2 pr-3">${r.sale}</td>
+          <td class="py-2 pr-3">${conv}%</td>
+        </tr>
+      `;
+    }).join('') || `<tr><td colspan="5" class="py-6 text-center text-[color:var(--muted)]">Nenhum lead de anúncio ainda.</td></tr>`;
+  }
+
+  async function loadStats() {
+    const res = await fetch(`/api/whatsapp-stats?key=${encodeURIComponent(key)}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    renderFunnel('funnel-ads', data.funnel.ads);
+    renderFunnel('funnel-organic', data.funnel.organic);
+    renderEvolutionChart(data.timeseries || []);
+    renderByAd(data.by_ad || []);
+  }
 
   async function loadContacts() {
     const search = document.getElementById('conversas-search').value.trim();
@@ -226,7 +346,7 @@
         <td class="py-2 pr-3">${c.phone}</td>
         <td class="py-2 pr-3">${escapeHtml(c.push_name || '—')}</td>
         <td class="py-2 pr-3"><span class="badge badge-${c.status}">${STATUS_LABELS[c.status] || c.status}</span></td>
-        <td class="py-2 pr-3">${c.is_ctwa ? `<span title="${escapeHtml(c.ad_headline || '')}">CTWA ✓</span>` : '—'}</td>
+        <td class="py-2 pr-3">${c.is_ctwa ? `<div class="flex items-center gap-2">${c.ad_thumbnail_url ? `<img class="ad-thumb-sm" src="${escapeHtml(c.ad_thumbnail_url)}" alt="" onerror="this.style.display='none'">` : ''}<span title="${escapeHtml(c.ad_headline || '')}">${escapeHtml(c.ad_headline || 'CTWA')}</span></div>` : '—'}</td>
         <td class="py-2 pr-3 max-w-xs truncate" title="${escapeHtml(c.first_message_text || '')}">${escapeHtml(c.first_message_text || '—')}</td>
         <td class="py-2 pr-3">${fmtTime(c.first_message_at)}</td>
         <td class="py-2 pr-3 space-x-1 whitespace-nowrap">

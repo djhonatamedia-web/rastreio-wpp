@@ -73,9 +73,9 @@ export async function processWhatsAppMessage({ raw, env, context }) {
     .prepare(`
       INSERT INTO whatsapp_contacts (
         wa_id, phone, push_name, ctwa_clid, ad_source_id, ad_headline,
-        ad_source_url, ad_media_type, is_ctwa, first_message_text,
-        first_message_at, status, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'lead', ?, ?)
+        ad_source_url, ad_media_type, ad_thumbnail_url, is_ctwa,
+        first_message_text, first_message_at, status, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'lead', ?, ?)
     `)
     .bind(
       extracted.waId,
@@ -86,6 +86,7 @@ export async function processWhatsAppMessage({ raw, env, context }) {
       extracted.adHeadline || null,
       extracted.adSourceUrl || null,
       extracted.adMediaType || null,
+      extracted.adThumbnailUrl || null,
       extracted.ctwaClid ? 1 : 0,
       extracted.text || null,
       extracted.timestamp || now,
@@ -180,5 +181,6 @@ function extractMessage(raw) {
     adHeadline: adReply?.title || null,
     adSourceUrl: adReply?.sourceURL || null,
     adMediaType: adReply?.mediaType != null ? String(adReply.mediaType) : null,
+    adThumbnailUrl: adReply?.thumbnailURL || null,
   };
 }

@@ -31,10 +31,11 @@ todos operacionais.
 
 ## Identificador crítico
 
-`ctwa_clid` — vem embutido no clique do anúncio, aparece (se o gateway
-repassar) no `contextInfo.externalAdReplyInfo` da primeira mensagem
-recebida (proto Baileys). Sem ele, o evento CAPI não tem como ser atribuído
-a um anúncio, então não é enviado (ver `docs/capi-whatsapp.md`).
+`ctwa_clid` — vem embutido no clique do anúncio. No payload do uazapi
+aparece em `message.content.contextInfo.externalAdReply.ctwaClid` (não só
+na primeira mensagem — visto também na resposta de WhatsApp Flow). Sem
+ele, o evento CAPI não tem como ser atribuído a um anúncio, então não é
+enviado (ver `docs/capi-whatsapp.md` e `docs/payload-uazapi.md`).
 
 ## Regras (não violar)
 
@@ -67,8 +68,10 @@ a um anúncio, então não é enviado (ver `docs/capi-whatsapp.md`).
 | `functions/api/whatsapp-contacts.js` | GET — aba "Conversas" do dashboard |
 | `functions/api/whatsapp-events.js` | GET — aba "Eventos" (log cru) |
 | `functions/api/whatsapp-status.js` | POST — marcar estágio + disparar CAPI |
+| `functions/api/whatsapp-stats.js` | GET — aba "Visão Geral" (funil, evolução diária, quebra por anúncio) |
 | `config/whatsapp.js` | `STAGE_TO_META_EVENT`, `VALID_STATUSES` |
-| `migrations/0001_whatsapp.sql` | Schema D1 |
+| `migrations/0001_whatsapp.sql` | Schema D1 inicial |
+| `migrations/0002_ad_thumbnail.sql` | Coluna `ad_thumbnail_url` (miniatura do criativo) |
 | `dash/index.html` | Dashboard single-file (Tailwind CDN, sem build) |
 | `docs/payload-uazapi.md` | A preencher na Fase 0 |
 | `docs/capi-whatsapp.md` | Referência do formato Meta CAPI business_messaging |
