@@ -60,6 +60,20 @@ export async function onRequestPost(context) {
     return json({ ok: true, status: new_status, capi: 'skipped: no Meta event mapped for this status' });
   }
 
+  // Guard against re-firing the same stage to Meta on every click. Confirmed
+  // 2026-08-24: with no guard, re-clicking a stage button (done deliberately
+  // during a ctwa_clid backfill, but just as easy to trigger by accident)
+  // sent the same contact's QualifiedLead 3-6x each, inflating Meta's event
+  // count well past the real number of qualified leads. One successful send
+  // per event_name per contact is enough — status still updates either way.
+  const alreadySent = await env.DB
+    .prepare('SELECT 1 FROM whatsapp_events WHERE wa_id = ? AND event_name = ? AND sent_to_meta = 1 AND meta_response_ok = 1 LIMIT 1')
+    .bind(wa_id, metaEventName)
+    .first();
+  if (alreadySent) {
+    return json({ ok: true, status: new_status, capi: `skipped: ${metaEventName} already sent successfully for this contact` });
+  }
+
   const customData = value != null ? { value: parseFloat(value) || 0, currency: currency || 'BRL' } : undefined;
 
   const { payload, response, skipped } = await sendWhatsAppEventToMeta({
