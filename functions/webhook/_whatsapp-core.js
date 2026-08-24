@@ -20,6 +20,18 @@
 // The one guarantee: `raw_payload` is ALWAYS persisted verbatim, regardless
 // of whether extraction below finds anything. That's what let us recover
 // the real envelope shape after the fact without needing a fresh capture.
+//
+// *** KNOWN ORDERING QUIRK (confirmed 2026-08-24) ***
+// uazapi does not guarantee webhook delivery in the same order WhatsApp
+// generated the messages. On a real CTWA lead, the ad-context message
+// (externalAdReply, entryPointConversionSource "ctwa_ad") had an earlier
+// messageTimestamp than the contact's free-typed first message, but our
+// webhook received/processed it SECOND. Since attribution is captured
+// once on contact creation, that meant the ad data landed on a message
+// for a contact that already existed — see the `existing` branch below,
+// which backfills attribution (and fires the first-touch CAPI send) the
+// first time ad context shows up, regardless of which message it arrives
+// on.
 // -----------------------------------------------------------------------------
 
 import { sendWhatsAppEventToMeta } from './_whatsapp-capi.js';
@@ -63,6 +75,36 @@ export async function processWhatsAppMessage({ raw, env, context }) {
       .prepare('UPDATE whatsapp_contacts SET push_name = COALESCE(?, push_name), updated_at = ? WHERE wa_id = ?')
       .bind(extracted.pushName || null, now, extracted.waId)
       .run();
+
+    // Ad context arriving on a later message than the one that created the
+    // contact (see ordering quirk note above). Backfill it once, and fire
+    // the same first-touch CAPI send we'd have fired had it arrived first —
+    // this contact never got one, since sendWhatsAppEventToMeta() skips
+    // without a ctwa_clid.
+    if (!existing.ctwa_clid && extracted.ctwaClid) {
+      await env.DB
+        .prepare(`
+          UPDATE whatsapp_contacts SET
+            ctwa_clid = ?, ad_source_id = ?, ad_headline = ?, ad_source_url = ?,
+            ad_media_type = ?, ad_thumbnail_url = ?, is_ctwa = 1, updated_at = ?
+          WHERE wa_id = ?
+        `)
+        .bind(
+          extracted.ctwaClid,
+          extracted.adSourceId || null,
+          extracted.adHeadline || null,
+          extracted.adSourceUrl || null,
+          extracted.adMediaType || null,
+          extracted.adThumbnailUrl || null,
+          now,
+          extracted.waId
+        )
+        .run();
+
+      const capi = await sendFirstTouchLead({ extracted, eventId, now, env, context });
+      return { ok: true, contact: 'existing', waId: extracted.waId, capi: `backfilled ctwa_clid, ${capi}` };
+    }
+
     return { ok: true, contact: 'existing', waId: extracted.waId };
   }
 
@@ -95,8 +137,18 @@ export async function processWhatsAppMessage({ raw, env, context }) {
     )
     .run();
 
+  const capi = await sendFirstTouchLead({ extracted, eventId, now, env, context });
+  return { ok: true, contact: 'created', waId: extracted.waId, capi };
+}
+
+// Fires the automatic first-touch 'LeadSubmitted' CAPI event and logs the
+// result, shared by the new-contact path and the existing-contact backfill
+// path (ad context can legitimately arrive on either message — see the
+// ordering quirk note at the top of this file). Returns a short status
+// string for the caller's response, doesn't throw.
+async function sendFirstTouchLead({ extracted, eventId, now, env, context }) {
   if (!extracted.ctwaClid) {
-    return { ok: true, contact: 'created', waId: extracted.waId, capi: 'skipped: no ctwa_clid' };
+    return 'skipped: no ctwa_clid';
   }
 
   const { payload, response, skipped } = await sendWhatsAppEventToMeta({
@@ -109,7 +161,7 @@ export async function processWhatsAppMessage({ raw, env, context }) {
   });
 
   if (skipped) {
-    return { ok: true, contact: 'created', waId: extracted.waId, capi: `skipped: ${skipped}` };
+    return `skipped: ${skipped}`;
   }
 
   const responseBody = await response.text();
@@ -134,7 +186,7 @@ export async function processWhatsAppMessage({ raw, env, context }) {
     ).run()
   );
 
-  return { ok: true, contact: 'created', waId: extracted.waId, capi: response.ok ? 'sent' : `failed (${response.status})` };
+  return response.ok ? 'sent' : `failed (${response.status})`;
 }
 
 async function logRawEvent({ env, waId, eventName, eventId, eventTime, messageType, raw }) {
