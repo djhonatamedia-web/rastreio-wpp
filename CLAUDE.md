@@ -59,6 +59,13 @@ enviado (ver `docs/capi-whatsapp.md` e `docs/payload-uazapi.md`).
 - **`POST /api/whatsapp-status` autentica via header `x-dash-key`**, não
   query string — é o único endpoint mutável do dashboard, e uma chave em
   query string de POST vazaria em log de acesso.
+- **IDs não-secretos (Pixel/Page/Customer/Conversion Action) podem ir pro
+  D1 via aba "Configurações"; credenciais de verdade (access token,
+  client secret, refresh token, developer token) NUNCA.** Ver
+  `functions/_shared/client-config.js` (`EDITABLE_CONFIG_KEYS`) e
+  `docs/client-config.md` pro raciocínio — misturar as duas categorias
+  transformaria um vazamento de `DASH_KEY` em vazamento de credencial de
+  API de verdade.
 
 ## Mapa de arquivos
 
@@ -78,16 +85,20 @@ enviado (ver `docs/capi-whatsapp.md` e `docs/payload-uazapi.md`).
 | `functions/_shared/text-normalize.js` | `normalize()` — minúsculas + sem acento, usado no match de palavra-chave |
 | `functions/_shared/google-ads-capi.js` | `sendGoogleAdsConversion()` — porta generalizada do `sendToGoogleAds()` do krob-tracking-stack-main |
 | `functions/api/track-click.js` | POST público — recebe `gclid`/`gbraid`/`wbraid` de uma landing page, salva por código curto |
+| `functions/_shared/client-config.js` | `getConfigValues()`/`getConfigValue()` — IDs não-secretos com fallback D1→env |
+| `functions/api/config.js` | GET/POST/DELETE — aba "Configurações" do dashboard |
 | `config/whatsapp.js` | `STAGE_TO_META_EVENT`, `VALID_STATUSES`, `KEYWORD_STATUSES`, `STAGE_TO_GOOGLE_ADS_ENV_VAR` |
 | `migrations/0001_whatsapp.sql` | Schema D1 inicial |
 | `migrations/0002_ad_thumbnail.sql` | Coluna `ad_thumbnail_url` (miniatura do criativo) |
 | `migrations/0003_stage_keywords.sql` | Tabela `stage_keywords` + coluna `status_source` |
 | `migrations/0004_google_ads_attribution.sql` | Tabela `ad_click_codes` + colunas `gclid`/`gbraid`/`wbraid`/`ad_platform` |
+| `migrations/0005_client_config.sql` | Tabela `client_config` (key/value, IDs não-secretos) |
 | `dash/index.html` | Dashboard single-file (Tailwind CDN, sem build) |
 | `docs/payload-uazapi.md` | A preencher na Fase 0 |
 | `docs/capi-whatsapp.md` | Referência do formato Meta CAPI business_messaging |
 | `docs/google-ads-whatsapp.md` | Ponte gclid → WhatsApp via landing page + código na mensagem |
 | `docs/funil-por-palavra-chave.md` | Funil automático por frase-gatilho do atendente |
+| `docs/client-config.md` | Por que IDs vão pro D1 e credenciais não |
 
 ## Contas desta implantação
 

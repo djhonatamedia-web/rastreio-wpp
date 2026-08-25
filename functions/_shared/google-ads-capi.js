@@ -8,6 +8,8 @@
 // Pinning v21 in the URL: the Google Ads SDKs lag the REST API and break
 // with "API version not found" — call REST directly, same as krob does.
 
+import { getConfigValues } from './client-config.js';
+
 let googleAdsTokenCache = { token: null, expiresAt: 0 };
 
 async function getGoogleAdsAccessToken(env) {
@@ -70,8 +72,8 @@ function formatConversionDateTime(unixSeconds, offsetString) {
 // stage-specific, read from an env var by the caller — see
 // STAGE_TO_GOOGLE_ADS_ENV_VAR in config/whatsapp.js).
 export async function sendGoogleAdsConversion({ conversionActionId, gclid, gbraid, wbraid, value, currency, eventTime, env }) {
-  if (!env.GOOGLE_ADS_CUSTOMER_ID || !env.GOOGLE_ADS_LOGIN_CUSTOMER_ID ||
-      !env.GOOGLE_ADS_DEVELOPER_TOKEN || !env.GOOGLE_ADS_CLIENT_ID ||
+  // OAuth credentials + developer token are real secrets, Cloudflare-env-only.
+  if (!env.GOOGLE_ADS_DEVELOPER_TOKEN || !env.GOOGLE_ADS_CLIENT_ID ||
       !env.GOOGLE_ADS_CLIENT_SECRET || !env.GOOGLE_ADS_REFRESH_TOKEN) {
     return { skipped: 'missing google ads env', payload: null, response: null };
   }
@@ -82,13 +84,23 @@ export async function sendGoogleAdsConversion({ conversionActionId, gclid, gbrai
     return { skipped: 'no click id', payload: null, response: null };
   }
 
+  // CUSTOMER_ID/LOGIN_CUSTOMER_ID are non-secret account ids, editable from
+  // the dashboard's "Configurações" tab (D1) — falls back to the env var
+  // of the same name if never set there.
+  const { GOOGLE_ADS_CUSTOMER_ID, GOOGLE_ADS_LOGIN_CUSTOMER_ID } = await getConfigValues(
+    env, ['GOOGLE_ADS_CUSTOMER_ID', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID']
+  );
+  if (!GOOGLE_ADS_CUSTOMER_ID || !GOOGLE_ADS_LOGIN_CUSTOMER_ID) {
+    return { skipped: 'missing google ads customer id', payload: null, response: null };
+  }
+
   const accessToken = await getGoogleAdsAccessToken(env);
   if (!accessToken) {
     return { skipped: 'oauth token unavailable', payload: null, response: null };
   }
 
-  const customerId = String(env.GOOGLE_ADS_CUSTOMER_ID).replace(/-/g, '');
-  const loginCustomerId = String(env.GOOGLE_ADS_LOGIN_CUSTOMER_ID).replace(/-/g, '');
+  const customerId = String(GOOGLE_ADS_CUSTOMER_ID).replace(/-/g, '');
+  const loginCustomerId = String(GOOGLE_ADS_LOGIN_CUSTOMER_ID).replace(/-/g, '');
 
   const conversion = {
     conversionAction: `customers/${customerId}/conversionActions/${conversionActionId}`,

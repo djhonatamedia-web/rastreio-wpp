@@ -66,6 +66,7 @@
       <div class="dash-tab" data-tab="conversas">Conversas</div>
       <div class="dash-tab" data-tab="eventos">Eventos</div>
       <div class="dash-tab" data-tab="keywords">Palavras-chave</div>
+      <div class="dash-tab" data-tab="config">Configurações</div>
     </div>
   </header>
 
@@ -193,6 +194,25 @@
       <div class="grid md:grid-cols-3 gap-4" id="keywords-board"></div>
     </section>
 
+    <!-- Configurações tab -->
+    <section id="tab-config" class="fade-in hidden space-y-4">
+      <div class="text-xs text-[color:var(--muted)] max-w-2xl">
+        IDs não-secretos do Meta e do Google Ads — Pixel ID, Page ID, conta
+        e Conversion Actions. Salvar aqui sobrepõe a variável de ambiente
+        do Cloudflare com o mesmo nome; "Restaurar padrão" volta a usar a
+        variável de ambiente. Tokens de acesso reais continuam só no
+        Cloudflare Pages, não aparecem aqui.
+      </div>
+      <div class="card p-4">
+        <div class="font-semibold text-sm mb-3">Meta</div>
+        <div class="space-y-3" id="config-fields-meta"></div>
+      </div>
+      <div class="card p-4">
+        <div class="font-semibold text-sm mb-3">Google Ads</div>
+        <div class="space-y-3" id="config-fields-google"></div>
+      </div>
+    </section>
+
   </main>
 </div>
 
@@ -259,7 +279,9 @@
       document.getElementById('tab-conversas').classList.toggle('hidden', target !== 'conversas');
       document.getElementById('tab-eventos').classList.toggle('hidden', target !== 'eventos');
       document.getElementById('tab-keywords').classList.toggle('hidden', target !== 'keywords');
+      document.getElementById('tab-config').classList.toggle('hidden', target !== 'config');
       if (target === 'keywords') loadKeywords();
+      if (target === 'config') loadConfig();
     });
   });
 
@@ -522,6 +544,81 @@
       return;
     }
     loadKeywords();
+  }
+
+  const CONFIG_FIELDS = [
+    { key: 'META_PIXEL_ID', label: 'Meta Pixel ID', group: 'meta' },
+    { key: 'META_PAGE_ID', label: 'Meta Page ID', group: 'meta' },
+    { key: 'GOOGLE_ADS_CUSTOMER_ID', label: 'Google Ads Customer ID', group: 'google' },
+    { key: 'GOOGLE_ADS_LOGIN_CUSTOMER_ID', label: 'Google Ads Login Customer ID (MCC)', group: 'google' },
+    { key: 'GOOGLE_ADS_CONVERSION_ACTION_QUALIFIED', label: 'Conversion Action — Qualificado', group: 'google' },
+    { key: 'GOOGLE_ADS_CONVERSION_ACTION_SCHEDULE', label: 'Conversion Action — Agendado', group: 'google' },
+    { key: 'GOOGLE_ADS_CONVERSION_ACTION_SALE', label: 'Conversion Action — Venda', group: 'google' },
+  ];
+
+  async function loadConfig() {
+    const res = await fetch(`/api/config?key=${encodeURIComponent(key)}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const byKey = {};
+    (data.config || []).forEach(c => byKey[c.key] = c);
+    renderConfig(byKey);
+  }
+
+  function renderConfig(byKey) {
+    for (const group of ['meta', 'google']) {
+      const container = document.getElementById(`config-fields-${group}`);
+      container.innerHTML = CONFIG_FIELDS.filter(f => f.group === group).map(f => {
+        const current = byKey[f.key] || { value: '', source: null };
+        const sourceLabel = current.source === 'dashboard'
+          ? '<span class="text-[10px] text-[color:var(--accent-green)]">configurado aqui</span>'
+          : current.source === 'env'
+            ? '<span class="text-[10px] text-[color:var(--muted)]">via variável de ambiente</span>'
+            : '<span class="text-[10px] text-[color:var(--muted)]">não configurado</span>';
+        return `
+          <div>
+            <label class="text-xs text-[color:var(--dim)] flex items-center justify-between">
+              <span>${f.label}</span>
+              ${sourceLabel}
+            </label>
+            <div class="flex gap-2 mt-1">
+              <input type="text" id="config-input-${f.key}" value="${escapeHtml(current.value || '')}" class="border border-[color:var(--border)] rounded-lg px-2.5 py-1.5 text-sm flex-1 mono">
+              <button class="action-btn" onclick="saveConfigField('${f.key}')">Salvar</button>
+              ${current.source === 'dashboard' ? `<button class="action-btn" onclick="resetConfigField('${f.key}')">Restaurar padrão</button>` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+  }
+
+  async function saveConfigField(configKey) {
+    const input = document.getElementById(`config-input-${configKey}`);
+    const value = input.value.trim();
+    if (!value) return;
+    const res = await fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-dash-key': key },
+      body: JSON.stringify({ key: configKey, value }),
+    });
+    if (!res.ok) {
+      alert('Erro ao salvar: ' + (await res.text()));
+      return;
+    }
+    loadConfig();
+  }
+
+  async function resetConfigField(configKey) {
+    const res = await fetch('/api/config', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json', 'x-dash-key': key },
+      body: JSON.stringify({ key: configKey }),
+    });
+    if (!res.ok) {
+      alert('Erro ao restaurar: ' + (await res.text()));
+      return;
+    }
+    loadConfig();
   }
 
   function openDetails(rawPayloadJson) {

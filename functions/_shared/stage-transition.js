@@ -13,6 +13,7 @@
 
 import { sendWhatsAppEventToMeta } from '../webhook/_whatsapp-capi.js';
 import { sendGoogleAdsConversion } from './google-ads-capi.js';
+import { getConfigValue } from './client-config.js';
 import { STAGE_TO_META_EVENT, STAGE_TO_GOOGLE_ADS_ENV_VAR } from '../../config/whatsapp.js';
 
 // source: 'manual' (dashboard button) | 'keyword' (trigger phrase match)
@@ -102,8 +103,11 @@ async function sendGoogleAdsIfNeeded({ env, waId, contact, newStatus, value, cur
     return { attempted: false, summary: 'skipped: no click id', statusCode: null, responseOk: null, responseBody: null, payloadSent: null };
   }
 
+  // Conversion Action id is a non-secret, per-stage id — editable from the
+  // dashboard's "Configurações" tab (D1), falls back to the env var of the
+  // same name (STAGE_TO_GOOGLE_ADS_ENV_VAR) if never set there.
   const envVarName = STAGE_TO_GOOGLE_ADS_ENV_VAR[newStatus];
-  const conversionActionId = envVarName ? env[envVarName] : null;
+  const conversionActionId = envVarName ? await getConfigValue(env, envVarName) : null;
 
   const alreadySent = await env.DB
     .prepare('SELECT 1 FROM whatsapp_events WHERE wa_id = ? AND event_name = ? AND google_ads_response_ok = 1 LIMIT 1')

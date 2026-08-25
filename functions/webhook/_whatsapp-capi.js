@@ -28,6 +28,7 @@
 // -----------------------------------------------------------------------------
 
 import { sha256, normalizePhone } from '../_shared/hashing.js';
+import { getConfigValues } from '../_shared/client-config.js';
 
 export async function sendWhatsAppEventToMeta({
   eventName,
@@ -38,20 +39,26 @@ export async function sendWhatsAppEventToMeta({
   customData,
   env,
 }) {
-  if (!env.META_PIXEL_ID || !env.META_ACCESS_TOKEN) {
+  // PIXEL_ID/PAGE_ID are non-secret ids, editable from the dashboard's
+  // "Configurações" tab (D1) — falls back to the env var of the same name
+  // if never set there. ACCESS_TOKEN is a real credential and stays
+  // Cloudflare-env-only, see docs/client-config.md.
+  const { META_PIXEL_ID, META_PAGE_ID } = await getConfigValues(env, ['META_PIXEL_ID', 'META_PAGE_ID']);
+
+  if (!META_PIXEL_ID || !env.META_ACCESS_TOKEN) {
     return { skipped: 'missing META_PIXEL_ID/META_ACCESS_TOKEN', payload: null, response: null };
   }
   if (!ctwaClid) {
     return { skipped: 'missing ctwa_clid — cannot attribute to an ad', payload: null, response: null };
   }
-  if (!env.META_PAGE_ID) {
+  if (!META_PAGE_ID) {
     return { skipped: 'missing META_PAGE_ID', payload: null, response: null };
   }
 
   const hashedPhone = await sha256(normalizePhone(phone, env.DEFAULT_COUNTRY_CODE));
 
   const userData = {
-    page_id: env.META_PAGE_ID,
+    page_id: META_PAGE_ID,
     ctwa_clid: ctwaClid,
   };
   if (hashedPhone) userData.ph = [hashedPhone];
@@ -72,7 +79,7 @@ export async function sendWhatsAppEventToMeta({
   const payloadJson = JSON.stringify(metaPayload);
 
   const response = await fetch(
-    `https://graph.facebook.com/v25.0/${env.META_PIXEL_ID}/events?access_token=${env.META_ACCESS_TOKEN}`,
+    `https://graph.facebook.com/v25.0/${META_PIXEL_ID}/events?access_token=${env.META_ACCESS_TOKEN}`,
     { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payloadJson }
   );
 
