@@ -1,104 +1,76 @@
 # Rastreio WPP
 
 > Anchor file for Claude Code sessions in this repo. Keep it scannable —
-> detail lives in `docs/`.
+> detail lives in `docs/`. Full domain knowledge (payload formats, bug
+> history, onboarding playbook) lives in the `agente-tracker` global
+> agent — invoke it for anything beyond a quick lookup here.
 
 ## O que este repo é
 
-Um stack de rastreamento Cloudflare Pages + D1 pra campanhas de anúncio
-que terminam numa conversa de WhatsApp — Meta Ads "Clique para o
-WhatsApp" (CTWA) e, desde 2026-08-25, Google Ads (via landing page +
-código na mensagem, ver `docs/google-ads-whatsapp.md`). Recebe webhooks do
-uazapi (gateway WhatsApp não-oficial, baseado em Baileys, conectado via QR
-code), guarda cada mensagem/conversa, deixa marcar o estágio de cada
-contato (lead → qualificado → agendado → venda) manualmente no dashboard
-ou automaticamente por palavra-chave (ver `docs/funil-por-palavra-chave.md`),
-e devolve cada transição pro Meta Conversions API e/ou pra API de
-conversões do Google Ads, o que o contato tiver de atribuição, pra que a
-entrega do anúncio otimize em direção a conversas que viram negócio de
-verdade.
+Cloudflare Pages + D1 pra rastrear anúncios que terminam numa conversa de
+WhatsApp e devolver o estágio do funil (lead → qualificado → agendado →
+venda) como conversão pro anúncio otimizar.
 
-Espírito de template reutilizável, igual ao `krob-tracking-stack-main`
-(projeto irmão, no mesmo workspace) — cada implantação roda no próprio
-Cloudflare account/D1 do cliente, sem backend compartilhado.
+- **Meta Ads CTWA**: `ctwa_clid` vem embutido na própria mensagem —
+  `message.content.contextInfo.externalAdReply.ctwaClid`.
+- **Google Ads**: sem "Clique para o WhatsApp" nativo — ponte via landing
+  page + código na mensagem (`docs/google-ads-whatsapp.md`).
+- **Funil automático**: por palavra-chave do atendente
+  (`docs/funil-por-palavra-chave.md`), além do clique manual no dashboard.
 
-## Status atual: Fase 0 fechada — ver `docs/payload-uazapi.md`
-
-O envelope real do webhook do uazapi e o campo `ctwa_clid` **já foram
-confirmados** contra leads reais da primeira campanha de teste. `ctwa_clid`
-não vem em `message.track_id`/`track_source` (caminho morto) — vem em
-`message.content.contextInfo.externalAdReply.ctwaClid`, o bloco de contexto
-de anúncio do Baileys passado sem modificação pelo uazapi.
-`extractMessage()` em `functions/webhook/_whatsapp-core.js` já extrai
-daí — rastreamento, dashboard e fan-out automático pro Meta CAPI estão
-todos operacionais.
-
-## Identificador crítico
-
-`ctwa_clid` — vem embutido no clique do anúncio. No payload do uazapi
-aparece em `message.content.contextInfo.externalAdReply.ctwaClid` (não só
-na primeira mensagem — visto também na resposta de WhatsApp Flow). Sem
-ele, o evento CAPI não tem como ser atribuído a um anúncio, então não é
-enviado (ver `docs/capi-whatsapp.md` e `docs/payload-uazapi.md`).
+Template reutilizável, espírito do `krob-tracking-stack-main` (projeto
+irmão) — cada cliente roda sua própria implantação isolada, sem backend
+compartilhado.
 
 ## Regras (não violar)
 
-- **Nunca commitar secrets.** `wrangler.toml`, `.dev.vars`, `.env*` são
-  gitignored. Só `wrangler.toml.example` é versionado. `config/whatsapp.js`
-  é versionado (não tem segredo, só mapeamento de estágio → evento).
-- **SQL sempre parametrizado.** `.bind()` em toda query, nunca interpolação.
-- **Hash de PII antes de mandar pra Meta.** Telefone via `sha256(normalizePhone(...))`
-  de `functions/_shared/hashing.js`. `ctwa_clid` é a exceção — vai SEM hash,
-  é assim que a Meta espera.
-- **`whatsapp_contacts` é a única tabela mutável.** Todo o resto
-  (`whatsapp_events`, e tudo no `krob-tracking-stack-main`) é append-only.
-  Desvio deliberado — estágio de conversa é estado, não fato pontual.
-- **Adapter fino, core gordo.** `functions/webhook/whatsapp/[slug].js` só
-  guarda o slug e delega pra `_whatsapp-core.js`. Nunca adicionar lógica de
-  parsing no adapter nem branching de provider no core.
-- **`POST /api/whatsapp-status` autentica via header `x-dash-key`**, não
-  query string — é o único endpoint mutável do dashboard, e uma chave em
-  query string de POST vazaria em log de acesso.
-- **IDs não-secretos (Pixel/Page/Customer/Conversion Action) podem ir pro
-  D1 via aba "Configurações"; credenciais de verdade (access token,
-  client secret, refresh token, developer token) NUNCA.** Ver
-  `functions/_shared/client-config.js` (`EDITABLE_CONFIG_KEYS`) e
-  `docs/client-config.md` pro raciocínio — misturar as duas categorias
-  transformaria um vazamento de `DASH_KEY` em vazamento de credencial de
-  API de verdade.
+- **Nunca commitar secrets.** Só `wrangler.toml.example` é versionado.
+- **SQL sempre parametrizado** (`.bind()`, nunca interpolação).
+- **Hash de PII antes de mandar pra Meta** (`functions/_shared/hashing.js`);
+  `ctwa_clid` é exceção, vai SEM hash.
+- **`whatsapp_contacts` é a única tabela mutável**; todo o resto é append-only.
+- **Adapter fino, core gordo**: `[slug].js` só valida o slug e delega;
+  nunca branching de provider em `_whatsapp-core.js`.
+- **Mudança de estágio SEMPRE via `applyStageTransition()`** — nunca
+  chamar o CAPI direto, senão perde a guarda contra reenvio duplicado.
+- **`POST /api/whatsapp-status` autentica por header `x-dash-key`**,
+  nunca query string.
+- **IDs não-secretos (Pixel/Page/Customer/Conversion Action) podem ir
+  pro D1 via aba "Configurações"; credenciais reais nunca** — ver
+  `docs/client-config.md`.
 
 ## Mapa de arquivos
 
 | Path | Função |
 |---|---|
 | `functions/webhook/whatsapp/[slug].js` | Adapter — gate de slug, delega pro core |
-| `functions/webhook/_whatsapp-core.js` | Parsing do payload uazapi, upsert de contato, fan-out CAPI |
-| `functions/webhook/_whatsapp-capi.js` | `sendWhatsAppEventToMeta()` — monta e envia o payload `business_messaging` |
-| `functions/webhook/_utils.js` | `guardSlug`/`timingSafeEqual`, copiado do krob-tracking-stack-main |
+| `functions/webhook/_whatsapp-core.js` | Parsing do payload uazapi, upsert de contato, atribuição |
+| `functions/webhook/_whatsapp-capi.js` | Envia evento `business_messaging` pra Meta |
+| `functions/_shared/google-ads-capi.js` | Envia conversão pro Google Ads (`uploadClickConversions`) |
+| `functions/_shared/stage-transition.js` | `applyStageTransition()` — único caminho pra mudar estágio |
+| `functions/_shared/text-normalize.js` | `normalize()` — usado no match de palavra-chave |
+| `functions/_shared/client-config.js` | IDs não-secretos, fallback D1 → env var |
 | `functions/_shared/hashing.js` | `sha256`/`normalizePhone`/`normalizeName` |
-| `functions/api/whatsapp-contacts.js` | GET — aba "Conversas" do dashboard |
+| `functions/api/whatsapp-contacts.js` | GET — aba "Conversas" |
 | `functions/api/whatsapp-events.js` | GET — aba "Eventos" (log cru) |
-| `functions/api/whatsapp-status.js` | POST — marcar estágio manualmente (via `applyStageTransition`) |
-| `functions/api/whatsapp-stats.js` | GET — aba "Visão Geral" (funil, evolução diária, quebra por anúncio) |
-| `functions/api/whatsapp-keywords.js` | GET/POST/DELETE — frases-gatilho da aba "Palavras-chave" |
-| `functions/_shared/stage-transition.js` | `applyStageTransition()` — muda estágio + dispara CAPI, usado pelo endpoint manual e pelo gatilho por palavra-chave |
-| `functions/_shared/text-normalize.js` | `normalize()` — minúsculas + sem acento, usado no match de palavra-chave |
-| `functions/_shared/google-ads-capi.js` | `sendGoogleAdsConversion()` — porta generalizada do `sendToGoogleAds()` do krob-tracking-stack-main |
-| `functions/api/track-click.js` | POST público — recebe `gclid`/`gbraid`/`wbraid` de uma landing page, salva por código curto |
-| `functions/_shared/client-config.js` | `getConfigValues()`/`getConfigValue()` — IDs não-secretos com fallback D1→env |
-| `functions/api/config.js` | GET/POST/DELETE — aba "Configurações" do dashboard |
-| `config/whatsapp.js` | `STAGE_TO_META_EVENT`, `VALID_STATUSES`, `KEYWORD_STATUSES`, `STAGE_TO_GOOGLE_ADS_ENV_VAR` |
-| `migrations/0001_whatsapp.sql` | Schema D1 inicial |
-| `migrations/0002_ad_thumbnail.sql` | Coluna `ad_thumbnail_url` (miniatura do criativo) |
-| `migrations/0003_stage_keywords.sql` | Tabela `stage_keywords` + coluna `status_source` |
-| `migrations/0004_google_ads_attribution.sql` | Tabela `ad_click_codes` + colunas `gclid`/`gbraid`/`wbraid`/`ad_platform` |
-| `migrations/0005_client_config.sql` | Tabela `client_config` (key/value, IDs não-secretos) |
+| `functions/api/whatsapp-status.js` | POST — marcar estágio manualmente |
+| `functions/api/whatsapp-stats.js` | GET — aba "Visão Geral" |
+| `functions/api/whatsapp-keywords.js` | GET/POST/DELETE — aba "Palavras-chave" |
+| `functions/api/config.js` | GET/POST/DELETE — aba "Configurações" |
+| `functions/api/track-click.js` | POST público — captura `gclid`/`gbraid`/`wbraid` de landing page |
+| `config/whatsapp.js` | Mapas estágio→evento, status válidos, palavras-chave, Google Ads |
+| `migrations/0001-0005` | Schema D1, em ordem (ver nomes dos arquivos) |
 | `dash/index.html` | Dashboard single-file (Tailwind CDN, sem build) |
-| `docs/payload-uazapi.md` | A preencher na Fase 0 |
-| `docs/capi-whatsapp.md` | Referência do formato Meta CAPI business_messaging |
-| `docs/google-ads-whatsapp.md` | Ponte gclid → WhatsApp via landing page + código na mensagem |
-| `docs/funil-por-palavra-chave.md` | Funil automático por frase-gatilho do atendente |
-| `docs/client-config.md` | Por que IDs vão pro D1 e credenciais não |
+
+## Deep reference
+
+| Pra... | Leia |
+|---|---|
+| Payload real do uazapi, campo por campo | `docs/payload-uazapi.md` |
+| Formato do Meta CAPI business_messaging | `docs/capi-whatsapp.md` |
+| Ponte gclid → WhatsApp (Google Ads) | `docs/google-ads-whatsapp.md` |
+| Funil automático por palavra-chave | `docs/funil-por-palavra-chave.md` |
+| Por que IDs vão pro D1 e credenciais não | `docs/client-config.md` |
 
 ## Contas desta implantação
 
