@@ -32,6 +32,18 @@
 // which backfills attribution (and fires the first-touch CAPI send) the
 // first time ad context shows up, regardless of which message it arrives
 // on.
+//
+// *** GOOGLE ADS ATTRIBUTION (2026-08-25) ***
+// Unlike Meta, Google Ads has no "Click to WhatsApp" ad format — a click
+// carries no context into the WhatsApp message on its own. The bridge:
+// the client's landing page captures gclid/gbraid/wbraid, POSTs it to
+// /api/track-click keyed by a short code, and embeds "Ref: <code>" in the
+// WhatsApp button's pre-filled message text. This file looks for that
+// code in the first message (new or backfilled, same pattern as
+// ctwa_clid above) and resolves it against ad_click_codes. See
+// docs/google-ads-whatsapp.md. No automatic first-touch CAPI send for
+// Google Ads (unlike LeadSubmitted for Meta) — only qualified/scheduled/
+// sale get sent, via applyStageTransition(), same as everything else.
 // -----------------------------------------------------------------------------
 
 import { sendWhatsAppEventToMeta } from './_whatsapp-capi.js';
@@ -77,7 +89,7 @@ export async function processWhatsAppMessage({ raw, env, context }) {
   }
 
   const existing = await env.DB
-    .prepare('SELECT id, ctwa_clid FROM whatsapp_contacts WHERE wa_id = ?')
+    .prepare('SELECT id, ctwa_clid, gclid, gbraid, wbraid FROM whatsapp_contacts WHERE wa_id = ?')
     .bind(extracted.waId)
     .first();
 
@@ -116,8 +128,22 @@ export async function processWhatsAppMessage({ raw, env, context }) {
       return { ok: true, contact: 'existing', waId: extracted.waId, capi: `backfilled ctwa_clid, ${capi}` };
     }
 
+    // Same ordering-quirk handling, for Google Ads attribution: the "Ref:
+    // <code>" text can land on a later message than the one that created
+    // the contact. No CAPI send here (see file header) — just backfill.
+    if (!existing.gclid && !existing.gbraid && !existing.wbraid && extracted.googleAdsCode) {
+      await backfillGoogleAdsAttribution({ env, waId: extracted.waId, code: extracted.googleAdsCode, now });
+      return { ok: true, contact: 'existing', waId: extracted.waId, capi: 'backfilled google ads click id' };
+    }
+
     return { ok: true, contact: 'existing', waId: extracted.waId };
   }
+
+  // Resolve a Google Ads click id before insert, if this first message
+  // carries a "Ref: <code>" from the landing-page bridge (see file header).
+  const googleClick = extracted.googleAdsCode
+    ? await lookupGoogleAdsClick({ env, code: extracted.googleAdsCode })
+    : null;
 
   // First-ever message from this wa_id: create the contact, first-touch
   // attribution (ctwa_clid, if present, is captured once and never
@@ -127,8 +153,9 @@ export async function processWhatsAppMessage({ raw, env, context }) {
       INSERT INTO whatsapp_contacts (
         wa_id, phone, push_name, ctwa_clid, ad_source_id, ad_headline,
         ad_source_url, ad_media_type, ad_thumbnail_url, is_ctwa,
+        gclid, gbraid, wbraid, ad_platform,
         first_message_text, first_message_at, status, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'lead', ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'lead', ?, ?)
     `)
     .bind(
       extracted.waId,
@@ -141,6 +168,10 @@ export async function processWhatsAppMessage({ raw, env, context }) {
       extracted.adMediaType || null,
       extracted.adThumbnailUrl || null,
       extracted.ctwaClid ? 1 : 0,
+      googleClick?.gclid || null,
+      googleClick?.gbraid || null,
+      googleClick?.wbraid || null,
+      extracted.ctwaClid ? 'meta' : (googleClick ? 'google' : null),
       extracted.text || null,
       extracted.timestamp || now,
       now,
@@ -148,8 +179,44 @@ export async function processWhatsAppMessage({ raw, env, context }) {
     )
     .run();
 
+  if (googleClick) {
+    context.waitUntil(markGoogleAdsCodeMatched({ env, code: extracted.googleAdsCode, waId: extracted.waId, now }));
+  }
+
   const capi = await sendFirstTouchLead({ extracted, eventId, now, env, context });
   return { ok: true, contact: 'created', waId: extracted.waId, capi };
+}
+
+// Looks up a Google Ads click id captured earlier by /api/track-click.
+// Returns null if the code is unknown (e.g. the lead edited the pre-filled
+// message and the code never made it in — see docs/google-ads-whatsapp.md).
+async function lookupGoogleAdsClick({ env, code }) {
+  const row = await env.DB
+    .prepare('SELECT gclid, gbraid, wbraid FROM ad_click_codes WHERE code = ?')
+    .bind(code)
+    .first();
+  return row || null;
+}
+
+async function markGoogleAdsCodeMatched({ env, code, waId, now }) {
+  await env.DB
+    .prepare('UPDATE ad_click_codes SET matched_wa_id = ?, matched_at = ? WHERE code = ?')
+    .bind(waId, now, code)
+    .run();
+}
+
+// Existing-contact path: backfill Google Ads attribution once, same
+// pattern as the ctwa_clid backfill above.
+async function backfillGoogleAdsAttribution({ env, waId, code, now }) {
+  const googleClick = await lookupGoogleAdsClick({ env, code });
+  if (!googleClick) return;
+
+  await env.DB
+    .prepare('UPDATE whatsapp_contacts SET gclid = ?, gbraid = ?, wbraid = ?, ad_platform = ?, updated_at = ? WHERE wa_id = ?')
+    .bind(googleClick.gclid || null, googleClick.gbraid || null, googleClick.wbraid || null, 'google', now, waId)
+    .run();
+
+  await markGoogleAdsCodeMatched({ env, code, waId, now });
 }
 
 // Fires the automatic first-touch 'LeadSubmitted' CAPI event and logs the
@@ -250,6 +317,13 @@ function extractMessage(raw) {
   const adReply = msg.content?.contextInfo?.externalAdReply || null;
   const ctwaClid = adReply?.ctwaClid || null;
 
+  // Google Ads landing-page bridge (see file header) — a short code the
+  // page embeds in the pre-filled WhatsApp message text, e.g. "Ref: AB12CD".
+  const googleAdsCodeMatch = /\bRef:\s*([A-Za-z0-9]{6})\b/i.exec(msg.text || '');
+  // Uppercased so case never matters when matching against ad_click_codes
+  // (the code is only ever compared, never shown back to a human).
+  const googleAdsCode = googleAdsCodeMatch ? googleAdsCodeMatch[1].toUpperCase() : null;
+
   return {
     waId,
     phone,
@@ -265,5 +339,6 @@ function extractMessage(raw) {
     adSourceUrl: adReply?.sourceURL || null,
     adMediaType: adReply?.mediaType != null ? String(adReply.mediaType) : null,
     adThumbnailUrl: adReply?.thumbnailURL || null,
+    googleAdsCode,
   };
 }

@@ -392,7 +392,7 @@
           <span class="badge badge-${c.status}">${STATUS_LABELS[c.status] || c.status}</span>
           ${c.status_source === 'keyword' ? '<span class="text-[10px] text-[color:var(--muted)] ml-1" title="Mudou sozinho por palavra-chave">🔤 frase</span>' : ''}
         </td>
-        <td class="py-2 pr-3">${c.is_ctwa ? `<div class="flex items-center gap-2">${c.ad_thumbnail_url ? `<img class="ad-thumb-sm" src="${escapeHtml(c.ad_thumbnail_url)}" alt="" onerror="this.style.display='none'">` : ''}<span title="${escapeHtml(c.ad_headline || '')}">${escapeHtml(c.ad_headline || 'CTWA')}</span></div>` : '—'}</td>
+        <td class="py-2 pr-3">${c.is_ctwa ? `<div class="flex items-center gap-2">${c.ad_thumbnail_url ? `<img class="ad-thumb-sm" src="${escapeHtml(c.ad_thumbnail_url)}" alt="" onerror="this.style.display='none'">` : ''}<span title="${escapeHtml(c.ad_headline || '')}">${escapeHtml(c.ad_headline || 'CTWA')}</span></div>` : (c.ad_platform === 'google' ? `<span class="badge badge-scheduled" title="${escapeHtml(c.gclid || '')}">Google Ads</span>` : '—')}</td>
         <td class="py-2 pr-3 max-w-xs truncate" title="${escapeHtml(c.first_message_text || '')}">${escapeHtml(c.first_message_text || '—')}</td>
         <td class="py-2 pr-3">${fmtTime(c.first_message_at)}</td>
         <td class="py-2 pr-3 space-x-1 whitespace-nowrap">

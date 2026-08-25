@@ -25,3 +25,14 @@ export const VALID_STATUSES = ['lead', 'qualified', 'scheduled', 'sale', 'lost']
 // — not here, since the right trigger words depend on the business
 // (a clinic that schedules vs. a store that sells), not on the code.
 export const KEYWORD_STATUSES = ['qualified', 'scheduled', 'sale'];
+
+// Maps a stage to the env var name holding that stage's Google Ads
+// Conversion Action id. The id itself is client-specific (a numeric id
+// from that client's Google Ads account), so it lives in an env var —
+// same treatment as META_PIXEL_ID — not hardcoded here. See
+// functions/_shared/google-ads-capi.js and docs/google-ads-whatsapp.md.
+export const STAGE_TO_GOOGLE_ADS_ENV_VAR = {
+  qualified: 'GOOGLE_ADS_CONVERSION_ACTION_QUALIFIED',
+  scheduled: 'GOOGLE_ADS_CONVERSION_ACTION_SCHEDULE',
+  sale: 'GOOGLE_ADS_CONVERSION_ACTION_SALE',
+};

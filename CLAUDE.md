@@ -5,14 +5,18 @@
 
 ## O que este repo é
 
-Um stack de rastreamento Cloudflare Pages + D1 pra campanhas Meta Ads
-"Clique para o WhatsApp" (CTWA). Recebe webhooks do uazapi (gateway
-WhatsApp não-oficial, baseado em Baileys, conectado via QR code), guarda
-cada mensagem/conversa, deixa marcar manualmente o estágio de cada contato
-(lead → qualificado → agendado → venda) num dashboard, e devolve cada
-transição pro Meta Conversions API (`action_source: business_messaging`)
-pra que a entrega do anúncio otimize em direção a conversas que viram
-negócio de verdade.
+Um stack de rastreamento Cloudflare Pages + D1 pra campanhas de anúncio
+que terminam numa conversa de WhatsApp — Meta Ads "Clique para o
+WhatsApp" (CTWA) e, desde 2026-08-25, Google Ads (via landing page +
+código na mensagem, ver `docs/google-ads-whatsapp.md`). Recebe webhooks do
+uazapi (gateway WhatsApp não-oficial, baseado em Baileys, conectado via QR
+code), guarda cada mensagem/conversa, deixa marcar o estágio de cada
+contato (lead → qualificado → agendado → venda) manualmente no dashboard
+ou automaticamente por palavra-chave (ver `docs/funil-por-palavra-chave.md`),
+e devolve cada transição pro Meta Conversions API e/ou pra API de
+conversões do Google Ads, o que o contato tiver de atribuição, pra que a
+entrega do anúncio otimize em direção a conversas que viram negócio de
+verdade.
 
 Espírito de template reutilizável, igual ao `krob-tracking-stack-main`
 (projeto irmão, no mesmo workspace) — cada implantação roda no próprio
@@ -72,13 +76,18 @@ enviado (ver `docs/capi-whatsapp.md` e `docs/payload-uazapi.md`).
 | `functions/api/whatsapp-keywords.js` | GET/POST/DELETE — frases-gatilho da aba "Palavras-chave" |
 | `functions/_shared/stage-transition.js` | `applyStageTransition()` — muda estágio + dispara CAPI, usado pelo endpoint manual e pelo gatilho por palavra-chave |
 | `functions/_shared/text-normalize.js` | `normalize()` — minúsculas + sem acento, usado no match de palavra-chave |
-| `config/whatsapp.js` | `STAGE_TO_META_EVENT`, `VALID_STATUSES`, `KEYWORD_STATUSES` |
+| `functions/_shared/google-ads-capi.js` | `sendGoogleAdsConversion()` — porta generalizada do `sendToGoogleAds()` do krob-tracking-stack-main |
+| `functions/api/track-click.js` | POST público — recebe `gclid`/`gbraid`/`wbraid` de uma landing page, salva por código curto |
+| `config/whatsapp.js` | `STAGE_TO_META_EVENT`, `VALID_STATUSES`, `KEYWORD_STATUSES`, `STAGE_TO_GOOGLE_ADS_ENV_VAR` |
 | `migrations/0001_whatsapp.sql` | Schema D1 inicial |
 | `migrations/0002_ad_thumbnail.sql` | Coluna `ad_thumbnail_url` (miniatura do criativo) |
 | `migrations/0003_stage_keywords.sql` | Tabela `stage_keywords` + coluna `status_source` |
+| `migrations/0004_google_ads_attribution.sql` | Tabela `ad_click_codes` + colunas `gclid`/`gbraid`/`wbraid`/`ad_platform` |
 | `dash/index.html` | Dashboard single-file (Tailwind CDN, sem build) |
 | `docs/payload-uazapi.md` | A preencher na Fase 0 |
 | `docs/capi-whatsapp.md` | Referência do formato Meta CAPI business_messaging |
+| `docs/google-ads-whatsapp.md` | Ponte gclid → WhatsApp via landing page + código na mensagem |
+| `docs/funil-por-palavra-chave.md` | Funil automático por frase-gatilho do atendente |
 
 ## Contas desta implantação
 
