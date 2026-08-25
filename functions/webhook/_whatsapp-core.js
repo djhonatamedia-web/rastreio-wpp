@@ -35,6 +35,8 @@
 // -----------------------------------------------------------------------------
 
 import { sendWhatsAppEventToMeta } from './_whatsapp-capi.js';
+import { applyStageTransition } from '../_shared/stage-transition.js';
+import { normalize } from '../_shared/text-normalize.js';
 
 export async function processWhatsAppMessage({ raw, env, context }) {
   const now = Math.floor(Date.now() / 1000);
@@ -60,6 +62,15 @@ export async function processWhatsAppMessage({ raw, env, context }) {
       raw,
     })
   );
+
+  // Attendant's own messages never create/attribute a contact (see the
+  // early return right below), but they're the ones we check for a
+  // configured trigger phrase — see the dynamic-funnel-by-keyword plan.
+  // Backgrounded: matching a phrase and firing the CAPI event shouldn't
+  // delay the 200 OK we owe uazapi.
+  if (extracted && extracted.fromMe && !extracted.isGroup && extracted.waId && extracted.text) {
+    context.waitUntil(checkStageKeyword({ env, waId: extracted.waId, text: extracted.text }));
+  }
 
   if (!extracted || !extracted.waId || extracted.fromMe || extracted.isGroup) {
     return { ok: true, skipped: !extracted ? 'unrecognized payload shape' : 'not an inbound 1:1 message' };
@@ -187,6 +198,26 @@ async function sendFirstTouchLead({ extracted, eventId, now, env, context }) {
   );
 
   return response.ok ? 'sent' : `failed (${response.status})`;
+}
+
+// Checks the attendant's own message against the configured trigger
+// phrases (stage_keywords table, managed from the "Palavras-chave"
+// dashboard tab — see functions/api/whatsapp-keywords.js) and applies the
+// matching stage transition through the same path a manual dashboard
+// click would use. First match wins if more than one phrase matches the
+// same message; a contact that doesn't exist yet (attendant replied
+// before any inbound message created one) is silently ignored.
+async function checkStageKeyword({ env, waId, text }) {
+  const normalizedText = normalize(text);
+  if (!normalizedText) return;
+
+  const rows = await env.DB.prepare('SELECT status, phrase FROM stage_keywords').all();
+  for (const row of rows.results || []) {
+    if (normalizedText.includes(normalize(row.phrase))) {
+      await applyStageTransition({ env, waId, newStatus: row.status, source: 'keyword' });
+      return;
+    }
+  }
 }
 
 async function logRawEvent({ env, waId, eventName, eventId, eventTime, messageType, raw }) {

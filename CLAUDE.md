@@ -67,11 +67,15 @@ enviado (ver `docs/capi-whatsapp.md` e `docs/payload-uazapi.md`).
 | `functions/_shared/hashing.js` | `sha256`/`normalizePhone`/`normalizeName` |
 | `functions/api/whatsapp-contacts.js` | GET — aba "Conversas" do dashboard |
 | `functions/api/whatsapp-events.js` | GET — aba "Eventos" (log cru) |
-| `functions/api/whatsapp-status.js` | POST — marcar estágio + disparar CAPI |
+| `functions/api/whatsapp-status.js` | POST — marcar estágio manualmente (via `applyStageTransition`) |
 | `functions/api/whatsapp-stats.js` | GET — aba "Visão Geral" (funil, evolução diária, quebra por anúncio) |
-| `config/whatsapp.js` | `STAGE_TO_META_EVENT`, `VALID_STATUSES` |
+| `functions/api/whatsapp-keywords.js` | GET/POST/DELETE — frases-gatilho da aba "Palavras-chave" |
+| `functions/_shared/stage-transition.js` | `applyStageTransition()` — muda estágio + dispara CAPI, usado pelo endpoint manual e pelo gatilho por palavra-chave |
+| `functions/_shared/text-normalize.js` | `normalize()` — minúsculas + sem acento, usado no match de palavra-chave |
+| `config/whatsapp.js` | `STAGE_TO_META_EVENT`, `VALID_STATUSES`, `KEYWORD_STATUSES` |
 | `migrations/0001_whatsapp.sql` | Schema D1 inicial |
 | `migrations/0002_ad_thumbnail.sql` | Coluna `ad_thumbnail_url` (miniatura do criativo) |
+| `migrations/0003_stage_keywords.sql` | Tabela `stage_keywords` + coluna `status_source` |
 | `dash/index.html` | Dashboard single-file (Tailwind CDN, sem build) |
 | `docs/payload-uazapi.md` | A preencher na Fase 0 |
 | `docs/capi-whatsapp.md` | Referência do formato Meta CAPI business_messaging |

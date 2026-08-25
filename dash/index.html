@@ -65,6 +65,7 @@
       <div class="dash-tab active" data-tab="visao-geral">Visão Geral</div>
       <div class="dash-tab" data-tab="conversas">Conversas</div>
       <div class="dash-tab" data-tab="eventos">Eventos</div>
+      <div class="dash-tab" data-tab="keywords">Palavras-chave</div>
     </div>
   </header>
 
@@ -180,6 +181,18 @@
       </div>
     </section>
 
+    <!-- Palavras-chave tab -->
+    <section id="tab-keywords" class="fade-in hidden space-y-4">
+      <div class="text-xs text-[color:var(--muted)] max-w-2xl">
+        Quando você (o atendente) escreve uma dessas frases numa conversa, o
+        estágio muda sozinho e o evento correspondente é enviado à Meta —
+        igual clicar no botão manualmente. Maiúsculas/minúsculas e acentos
+        não importam. Só conta o que <strong>você</strong> escreve, nunca o
+        que o lead escreve.
+      </div>
+      <div class="grid md:grid-cols-3 gap-4" id="keywords-board"></div>
+    </section>
+
   </main>
 </div>
 
@@ -245,6 +258,8 @@
       document.getElementById('tab-visao-geral').classList.toggle('hidden', target !== 'visao-geral');
       document.getElementById('tab-conversas').classList.toggle('hidden', target !== 'conversas');
       document.getElementById('tab-eventos').classList.toggle('hidden', target !== 'eventos');
+      document.getElementById('tab-keywords').classList.toggle('hidden', target !== 'keywords');
+      if (target === 'keywords') loadKeywords();
     });
   });
 
@@ -373,7 +388,10 @@
       <tr class="row-hover border-b border-[color:var(--border)]">
         <td class="py-2 pr-3">${c.phone}</td>
         <td class="py-2 pr-3">${escapeHtml(c.push_name || '—')}</td>
-        <td class="py-2 pr-3"><span class="badge badge-${c.status}">${STATUS_LABELS[c.status] || c.status}</span></td>
+        <td class="py-2 pr-3">
+          <span class="badge badge-${c.status}">${STATUS_LABELS[c.status] || c.status}</span>
+          ${c.status_source === 'keyword' ? '<span class="text-[10px] text-[color:var(--muted)] ml-1" title="Mudou sozinho por palavra-chave">🔤 frase</span>' : ''}
+        </td>
         <td class="py-2 pr-3">${c.is_ctwa ? `<div class="flex items-center gap-2">${c.ad_thumbnail_url ? `<img class="ad-thumb-sm" src="${escapeHtml(c.ad_thumbnail_url)}" alt="" onerror="this.style.display='none'">` : ''}<span title="${escapeHtml(c.ad_headline || '')}">${escapeHtml(c.ad_headline || 'CTWA')}</span></div>` : '—'}</td>
         <td class="py-2 pr-3 max-w-xs truncate" title="${escapeHtml(c.first_message_text || '')}">${escapeHtml(c.first_message_text || '—')}</td>
         <td class="py-2 pr-3">${fmtTime(c.first_message_at)}</td>
@@ -435,6 +453,75 @@
     const value = prompt('Valor da venda (R$):', '');
     if (value === null) return;
     markStatus(waId, 'sale', value ? parseFloat(value.replace(',', '.')) : null, 'BRL');
+  }
+
+  const KEYWORD_STAGES = [
+    { key: 'qualified', label: 'Qualificado' },
+    { key: 'scheduled', label: 'Agendado' },
+    { key: 'sale', label: 'Venda' },
+  ];
+  let currentKeywords = [];
+
+  async function loadKeywords() {
+    const res = await fetch(`/api/whatsapp-keywords?key=${encodeURIComponent(key)}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    currentKeywords = data.keywords || [];
+    renderKeywords();
+  }
+
+  function renderKeywords() {
+    const board = document.getElementById('keywords-board');
+    board.innerHTML = KEYWORD_STAGES.map(stage => {
+      const items = currentKeywords.filter(k => k.status === stage.key);
+      return `
+        <div class="card p-4">
+          <div class="font-semibold text-sm mb-3">${stage.label}</div>
+          <div class="space-y-1.5 mb-3" id="keywords-list-${stage.key}">
+            ${items.map(k => `
+              <div class="flex items-center justify-between gap-2 text-sm bg-[color:var(--bg)] rounded-lg px-2.5 py-1.5">
+                <span class="truncate">${escapeHtml(k.phrase)}</span>
+                <button class="action-btn" onclick="deleteKeyword(${k.id})">Remover</button>
+              </div>
+            `).join('') || `<div class="text-xs text-[color:var(--muted)]">Nenhuma frase cadastrada.</div>`}
+          </div>
+          <div class="flex gap-2">
+            <input type="text" id="keyword-input-${stage.key}" placeholder="ex: agendado com sucesso" class="border border-[color:var(--border)] rounded-lg px-2.5 py-1.5 text-sm flex-1">
+            <button class="action-btn" onclick="addKeyword('${stage.key}')">Adicionar</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  async function addKeyword(status) {
+    const input = document.getElementById(`keyword-input-${status}`);
+    const phrase = input.value.trim();
+    if (!phrase) return;
+    const res = await fetch('/api/whatsapp-keywords', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-dash-key': key },
+      body: JSON.stringify({ status, phrase }),
+    });
+    if (!res.ok) {
+      alert('Erro ao adicionar frase: ' + (await res.text()));
+      return;
+    }
+    input.value = '';
+    loadKeywords();
+  }
+
+  async function deleteKeyword(id) {
+    const res = await fetch('/api/whatsapp-keywords', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json', 'x-dash-key': key },
+      body: JSON.stringify({ id }),
+    });
+    if (!res.ok) {
+      alert('Erro ao remover frase: ' + (await res.text()));
+      return;
+    }
+    loadKeywords();
   }
 
   function openDetails(rawPayloadJson) {
