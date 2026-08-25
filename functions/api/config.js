@@ -22,12 +22,16 @@ export async function onRequestGet(context) {
   }
 
   let overrides = {};
+  let migrationPending = false;
   if (env.DB) {
     try {
       const rows = await env.DB.prepare('SELECT key, value FROM client_config').all();
       for (const row of rows.results || []) overrides[row.key] = row.value;
     } catch (e) {
-      // migration 0005 not run yet — every key just falls back to env below.
+      // migration 0005 not run yet — every key just falls back to env below,
+      // but the dashboard needs to know so it can tell the user why saving
+      // will fail instead of pretending everything's fine.
+      migrationPending = true;
     }
   }
 
@@ -38,7 +42,7 @@ export async function onRequestGet(context) {
     return { key: k, value, source };
   });
 
-  return json({ config });
+  return json({ config, migration_pending: migrationPending });
 }
 
 export async function onRequestPost(context) {
@@ -65,10 +69,14 @@ export async function onRequestPost(context) {
   }
 
   const now = Math.floor(Date.now() / 1000);
-  await env.DB
-    .prepare('INSERT INTO client_config (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at')
-    .bind(configKey, String(value).trim(), now)
-    .run();
+  try {
+    await env.DB
+      .prepare('INSERT INTO client_config (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at')
+      .bind(configKey, String(value).trim(), now)
+      .run();
+  } catch (e) {
+    return json({ error: `D1 write failed — run migrations/0005_client_config.sql first: ${e.message}` }, 500);
+  }
 
   return json({ ok: true });
 }
@@ -92,7 +100,12 @@ export async function onRequestDelete(context) {
     return json({ error: `key must be one of: ${EDITABLE_CONFIG_KEYS.join(', ')}` }, 400);
   }
 
-  await env.DB.prepare('DELETE FROM client_config WHERE key = ?').bind(body.key).run();
+  try {
+    await env.DB.prepare('DELETE FROM client_config WHERE key = ?').bind(body.key).run();
+  } catch (e) {
+    return json({ error: `D1 write failed — run migrations/0005_client_config.sql first: ${e.message}` }, 500);
+  }
+
   return json({ ok: true });
 }
 

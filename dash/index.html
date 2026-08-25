@@ -203,6 +203,10 @@
         variável de ambiente. Tokens de acesso reais continuam só no
         Cloudflare Pages, não aparecem aqui.
       </div>
+      <div id="config-migration-warning" class="hidden card p-3 text-sm" style="border-color: var(--accent-red); color: var(--accent-red)">
+        A tabela <code class="mono">client_config</code> ainda não existe no banco — rode
+        <code class="mono">migrations/0005_client_config.sql</code> no D1 Console antes de salvar algo aqui.
+      </div>
       <div class="card p-4">
         <div class="font-semibold text-sm mb-3">Meta</div>
         <div class="space-y-3" id="config-fields-meta"></div>
@@ -560,6 +564,7 @@
     const res = await fetch(`/api/config?key=${encodeURIComponent(key)}`);
     if (!res.ok) return;
     const data = await res.json();
+    document.getElementById('config-migration-warning').classList.toggle('hidden', !data.migration_pending);
     const byKey = {};
     (data.config || []).forEach(c => byKey[c.key] = c);
     renderConfig(byKey);
