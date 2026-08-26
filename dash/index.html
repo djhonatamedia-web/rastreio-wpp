@@ -56,10 +56,13 @@
           <div class="text-xs text-[color:var(--muted)]">Rastreamento de campanhas Clique-para-WhatsApp</div>
         </div>
       </div>
-      <label class="flex items-center gap-2 text-xs text-[color:var(--dim)]">
-        <input type="checkbox" id="auto-refresh" class="rounded">
-        auto-refresh 10s
-      </label>
+      <div class="flex items-center gap-3">
+        <select id="client-switcher" class="border border-[color:var(--border)] rounded-lg px-2 py-1.5 text-sm mono max-w-[10rem]"></select>
+        <label class="flex items-center gap-2 text-xs text-[color:var(--dim)]">
+          <input type="checkbox" id="auto-refresh" class="rounded">
+          auto-refresh 10s
+        </label>
+      </div>
     </div>
     <div class="max-w-7xl mx-auto px-6 flex gap-1">
       <div class="dash-tab active" data-tab="visao-geral">Visão Geral</div>
@@ -67,6 +70,7 @@
       <div class="dash-tab" data-tab="eventos">Eventos</div>
       <div class="dash-tab" data-tab="keywords">Palavras-chave</div>
       <div class="dash-tab" data-tab="config">Configurações</div>
+      <div class="dash-tab" data-tab="clientes">Clientes</div>
     </div>
   </header>
 
@@ -217,6 +221,37 @@
       </div>
     </section>
 
+    <!-- Clientes tab -->
+    <section id="tab-clientes" class="fade-in hidden space-y-4">
+      <div class="text-xs text-[color:var(--muted)] max-w-2xl">
+        Cada cliente tem sua própria URL de webhook e suas próprias
+        credenciais reais (token de acesso Meta, refresh token do Google
+        Ads) — essas ficam só no Cloudflare Pages, como variável de
+        ambiente com o prefixo do slug abaixo (ex.:
+        <code class="mono">TINTIM_META_ACCESS_TOKEN</code>). IDs
+        não-secretos (Pixel, Customer, Conversion Action) ficam na aba
+        "Configurações", um cliente de cada vez.
+      </div>
+      <div class="card p-4">
+        <div class="font-semibold text-sm mb-3">Novo cliente</div>
+        <div class="flex gap-2 flex-wrap items-end">
+          <div>
+            <label class="text-xs text-[color:var(--dim)] block mb-1">Nome</label>
+            <input type="text" id="new-client-name" placeholder="ex: Tintim" class="border border-[color:var(--border)] rounded-lg px-2.5 py-1.5 text-sm">
+          </div>
+          <div>
+            <label class="text-xs text-[color:var(--dim)] block mb-1">Slug</label>
+            <input type="text" id="new-client-slug" placeholder="ex: tintim" class="border border-[color:var(--border)] rounded-lg px-2.5 py-1.5 text-sm mono">
+          </div>
+          <button class="action-btn" onclick="createClient()">Criar</button>
+        </div>
+      </div>
+      <div class="card p-4">
+        <div class="font-semibold text-sm mb-3">Clientes cadastrados</div>
+        <div id="clients-list" class="space-y-3"></div>
+      </div>
+    </section>
+
   </main>
 </div>
 
@@ -244,29 +279,65 @@
 
 <script>
   let key = new URLSearchParams(location.search).get('key') || sessionStorage.getItem('dashKey') || '';
+  let currentClient = new URLSearchParams(location.search).get('client') || localStorage.getItem('currentClient') || '';
+  let allClients = [];
   let autoRefreshTimer = null;
 
+  // Returns the client list on success (auth valid), or null (401). This
+  // endpoint doesn't require a `client` param, unlike the data endpoints,
+  // so it doubles as the login check.
   async function tryAuth(k) {
-    const res = await fetch(`/api/whatsapp-contacts?key=${encodeURIComponent(k)}&limit=1`);
-    return res.status !== 401;
+    const res = await fetch(`/api/clients?key=${encodeURIComponent(k)}`);
+    if (res.status === 401) return null;
+    const data = await res.json();
+    return data.clients || [];
   }
 
   async function boot() {
-    if (key && await tryAuth(key)) {
+    const clients = key ? await tryAuth(key) : null;
+    if (clients) {
       sessionStorage.setItem('dashKey', key);
       document.getElementById('auth-gate').classList.add('hidden');
       document.getElementById('app').classList.remove('hidden');
-      loadStats();
-      loadContacts();
-      loadEvents();
+      setupClientSwitcher(clients);
     } else {
       document.getElementById('auth-gate').classList.remove('hidden');
     }
   }
 
+  function setupClientSwitcher(clients) {
+    allClients = clients;
+    const sel = document.getElementById('client-switcher');
+    if (!clients.length) {
+      sel.innerHTML = '<option value="">Nenhum cliente</option>';
+      return;
+    }
+    if (!currentClient || !clients.some(c => c.slug === currentClient)) {
+      currentClient = clients[0].slug;
+    }
+    sel.innerHTML = clients.map(c => `<option value="${escapeHtml(c.slug)}" ${c.slug === currentClient ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('');
+    onClientChanged();
+  }
+
+  function onClientChanged() {
+    localStorage.setItem('currentClient', currentClient);
+    const url = new URL(location.href);
+    url.searchParams.set('client', currentClient);
+    history.replaceState(null, '', url);
+    loadStats();
+    loadContacts();
+    loadEvents();
+  }
+
+  document.getElementById('client-switcher').addEventListener('change', (e) => {
+    currentClient = e.target.value;
+    onClientChanged();
+  });
+
   document.getElementById('auth-submit').addEventListener('click', async () => {
     const k = document.getElementById('auth-input').value.trim();
-    if (await tryAuth(k)) {
+    const clients = await tryAuth(k);
+    if (clients) {
       key = k;
       boot();
     } else {
@@ -284,8 +355,10 @@
       document.getElementById('tab-eventos').classList.toggle('hidden', target !== 'eventos');
       document.getElementById('tab-keywords').classList.toggle('hidden', target !== 'keywords');
       document.getElementById('tab-config').classList.toggle('hidden', target !== 'config');
+      document.getElementById('tab-clientes').classList.toggle('hidden', target !== 'clientes');
       if (target === 'keywords') loadKeywords();
       if (target === 'config') loadConfig();
+      if (target === 'clientes') loadClientsAdmin();
     });
   });
 
@@ -374,7 +447,7 @@
   let statsRangeDays = 30;
 
   async function loadStats() {
-    const res = await fetch(`/api/whatsapp-stats?key=${encodeURIComponent(key)}&days=${statsRangeDays}`);
+    const res = await fetch(`/api/whatsapp-stats?key=${encodeURIComponent(key)}&client=${encodeURIComponent(currentClient)}&days=${statsRangeDays}`);
     if (!res.ok) return;
     const data = await res.json();
     renderFunnel(data.funnel.ads, data.funnel.organic);
@@ -394,7 +467,7 @@
   async function loadContacts() {
     const search = document.getElementById('conversas-search').value.trim();
     const onlyCtwa = document.getElementById('conversas-only-ctwa').checked ? '1' : '0';
-    const params = new URLSearchParams({ key, only_ctwa: onlyCtwa });
+    const params = new URLSearchParams({ key, client: currentClient, only_ctwa: onlyCtwa });
     if (search) params.set('search', search);
     const res = await fetch(`/api/whatsapp-contacts?${params}`);
     const data = await res.json();
@@ -434,7 +507,7 @@
   async function loadEvents() {
     const search = document.getElementById('eventos-search').value.trim();
     const onlyCtwa = document.getElementById('eventos-only-ctwa').checked ? '1' : '0';
-    const params = new URLSearchParams({ key, only_ctwa: onlyCtwa });
+    const params = new URLSearchParams({ key, client: currentClient, only_ctwa: onlyCtwa });
     if (search) params.set('search', search);
     const res = await fetch(`/api/whatsapp-events?${params}`);
     const data = await res.json();
@@ -461,7 +534,7 @@
   }
 
   async function markStatus(waId, newStatus, value, currency) {
-    const body = { wa_id: waId, new_status: newStatus };
+    const body = { client: currentClient, wa_id: waId, new_status: newStatus };
     if (value != null) { body.value = value; body.currency = currency || 'BRL'; }
     const res = await fetch('/api/whatsapp-status', {
       method: 'POST',
@@ -489,7 +562,7 @@
   let currentKeywords = [];
 
   async function loadKeywords() {
-    const res = await fetch(`/api/whatsapp-keywords?key=${encodeURIComponent(key)}`);
+    const res = await fetch(`/api/whatsapp-keywords?key=${encodeURIComponent(key)}&client=${encodeURIComponent(currentClient)}`);
     if (!res.ok) return;
     const data = await res.json();
     currentKeywords = data.keywords || [];
@@ -527,7 +600,7 @@
     const res = await fetch('/api/whatsapp-keywords', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-dash-key': key },
-      body: JSON.stringify({ status, phrase }),
+      body: JSON.stringify({ client: currentClient, status, phrase }),
     });
     if (!res.ok) {
       alert('Erro ao adicionar frase: ' + (await res.text()));
@@ -541,7 +614,7 @@
     const res = await fetch('/api/whatsapp-keywords', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json', 'x-dash-key': key },
-      body: JSON.stringify({ id }),
+      body: JSON.stringify({ client: currentClient, id }),
     });
     if (!res.ok) {
       alert('Erro ao remover frase: ' + (await res.text()));
@@ -561,7 +634,7 @@
   ];
 
   async function loadConfig() {
-    const res = await fetch(`/api/config?key=${encodeURIComponent(key)}`);
+    const res = await fetch(`/api/config?key=${encodeURIComponent(key)}&client=${encodeURIComponent(currentClient)}`);
     if (!res.ok) return;
     const data = await res.json();
     document.getElementById('config-migration-warning').classList.toggle('hidden', !data.migration_pending);
@@ -604,7 +677,7 @@
     const res = await fetch('/api/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-dash-key': key },
-      body: JSON.stringify({ key: configKey, value }),
+      body: JSON.stringify({ client: currentClient, key: configKey, value }),
     });
     if (!res.ok) {
       alert('Erro ao salvar: ' + (await res.text()));
@@ -617,13 +690,59 @@
     const res = await fetch('/api/config', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json', 'x-dash-key': key },
-      body: JSON.stringify({ key: configKey }),
+      body: JSON.stringify({ client: currentClient, key: configKey }),
     });
     if (!res.ok) {
       alert('Erro ao restaurar: ' + (await res.text()));
       return;
     }
     loadConfig();
+  }
+
+  async function loadClientsAdmin() {
+    const res = await fetch(`/api/clients?key=${encodeURIComponent(key)}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    renderClientsAdmin(data.clients || []);
+  }
+
+  function renderClientsAdmin(clients) {
+    const list = document.getElementById('clients-list');
+    list.innerHTML = clients.map(c => {
+      const webhookUrl = `${location.origin}/webhook/whatsapp/${c.webhook_slug}`;
+      const prefix = c.slug.toUpperCase().replace(/-/g, '_');
+      const secretNames = ['META_ACCESS_TOKEN', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_REFRESH_TOKEN', 'GOOGLE_ADS_DEVELOPER_TOKEN'];
+      return `
+        <div class="border border-[color:var(--border)] rounded-lg p-3 text-sm space-y-1">
+          <div class="font-medium">${escapeHtml(c.name)} <span class="text-xs text-[color:var(--muted)] mono">(${escapeHtml(c.slug)})</span></div>
+          <div class="text-xs text-[color:var(--dim)]">Webhook uazapi: <span class="mono">${escapeHtml(webhookUrl)}</span></div>
+          <div class="text-xs text-[color:var(--dim)]">Secrets no Cloudflare Pages (só as que esse cliente usar): ${secretNames.map(n => `<span class="mono">${prefix}_${n}</span>`).join(', ')}</div>
+        </div>
+      `;
+    }).join('') || `<div class="text-xs text-[color:var(--muted)]">Nenhum cliente cadastrado ainda.</div>`;
+  }
+
+  async function createClient() {
+    const name = document.getElementById('new-client-name').value.trim();
+    const slug = document.getElementById('new-client-slug').value.trim().toLowerCase();
+    if (!name || !slug) return;
+    const res = await fetch('/api/clients', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-dash-key': key },
+      body: JSON.stringify({ name, slug }),
+    });
+    if (!res.ok) {
+      alert('Erro ao criar cliente: ' + (await res.text()));
+      return;
+    }
+    document.getElementById('new-client-name').value = '';
+    document.getElementById('new-client-slug').value = '';
+    loadClientsAdmin();
+    const listRes = await fetch(`/api/clients?key=${encodeURIComponent(key)}`);
+    if (listRes.ok) {
+      const data = await listRes.json();
+      setupClientSwitcher(data.clients || []);
+    }
   }
 
   function openDetails(rawPayloadJson) {

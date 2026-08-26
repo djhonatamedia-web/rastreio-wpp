@@ -1,19 +1,21 @@
-// GET /api/whatsapp-stats?key=...&days=30
+// GET /api/whatsapp-stats?key=...&client=<slug>&days=30
 //
-// Dashboard "Visão Geral" tab — funil (anúncios vs orgânico), evolução
-// diária e quebra por anúncio. Read-only, mesmo padrão de auth por query
-// string dos outros GETs (whatsapp-contacts.js, whatsapp-events.js).
+// Dashboard "Visao Geral" tab - funil (anuncios vs organico), evolucao
+// diaria e quebra por anuncio, scoped to one client (see
+// functions/_shared/clients.js).
 //
-// "Funil" aqui trata o campo `status` de whatsapp_contacts como o estágio
-// mais avançado já alcançado (lead < qualified < scheduled < sale), não
-// como histórico de transições — é o mesmo modelo que os botões do
-// dashboard já usam. `lost` é contado à parte, não drena o funil.
+// "Funil" aqui trata o campo `status` de whatsapp_contacts como o estagio
+// mais avancado ja alcancado (lead < qualified < scheduled < sale), nao
+// como historico de transicoes - e o mesmo modelo que os botoes do
+// dashboard ja usam. `lost` e contado a parte, nao drena o funil.
 //
-// `days` recorta por coorte: funil e "por anúncio" só contam contatos
-// CRIADOS na janela (últimos N dias); a evolução diária é por atividade
-// (eventos de mudança de estágio contam no dia em que aconteceram, mesmo
-// que o contato seja mais antigo que a janela) — é a leitura mais útil
-// pra um gráfico "o que aconteceu por dia".
+// `days` recorta por coorte: funil e "por anuncio" so contam contatos
+// CRIADOS na janela (ultimos N dias); a evolucao diaria e por atividade
+// (eventos de mudanca de estagio contam no dia em que aconteceram, mesmo
+// que o contato seja mais antigo que a janela) - e a leitura mais util
+// pra um grafico "o que aconteceu por dia".
+
+import { resolveClientBySlug } from '../_shared/clients.js';
 
 export async function onRequestGet(context) {
   const { request, env } = context;
@@ -22,6 +24,11 @@ export async function onRequestGet(context) {
   const key = url.searchParams.get('key');
   if (!env.DASH_KEY || key !== env.DASH_KEY) {
     return json({ error: 'Unauthorized' }, 401);
+  }
+
+  const client = await resolveClientBySlug(env, url.searchParams.get('client'));
+  if (!client) {
+    return json({ error: 'client invalido ou nao informado' }, 400);
   }
 
   const days = clampInt(url.searchParams.get('days'), 30, 1, 365);
@@ -37,25 +44,25 @@ export async function onRequestGet(context) {
         SUM(CASE WHEN status = 'sale' THEN 1 ELSE 0 END) as sale,
         SUM(CASE WHEN status = 'lost' THEN 1 ELSE 0 END) as lost
       FROM whatsapp_contacts
-      WHERE created_at >= ?
+      WHERE client_id = ? AND created_at >= ?
       GROUP BY is_ctwa
-    `).bind(cutoff).all();
+    `).bind(client.id, cutoff).all();
 
     const leadsPerDay = await env.DB.prepare(`
       SELECT date(created_at, 'unixepoch') as day, COUNT(*) as leads
       FROM whatsapp_contacts
-      WHERE created_at >= ?
+      WHERE client_id = ? AND created_at >= ?
       GROUP BY day
       ORDER BY day
-    `).bind(cutoff).all();
+    `).bind(client.id, cutoff).all();
 
     const stagesPerDay = await env.DB.prepare(`
       SELECT date(created_at, 'unixepoch') as day, event_name, COUNT(DISTINCT wa_id) as count
       FROM whatsapp_events
-      WHERE event_name IN ('QualifiedLead', 'Schedule', 'Purchase') AND created_at >= ?
+      WHERE client_id = ? AND event_name IN ('QualifiedLead', 'Schedule', 'Purchase') AND created_at >= ?
       GROUP BY day, event_name
       ORDER BY day
-    `).bind(cutoff).all();
+    `).bind(client.id, cutoff).all();
 
     const byAd = await env.DB.prepare(`
       SELECT
@@ -64,11 +71,11 @@ export async function onRequestGet(context) {
         SUM(CASE WHEN status IN ('qualified','scheduled','sale') THEN 1 ELSE 0 END) as qualified,
         SUM(CASE WHEN status = 'sale' THEN 1 ELSE 0 END) as sale
       FROM whatsapp_contacts
-      WHERE is_ctwa = 1 AND ad_source_id IS NOT NULL AND created_at >= ?
+      WHERE client_id = ? AND is_ctwa = 1 AND ad_source_id IS NOT NULL AND created_at >= ?
       GROUP BY ad_source_id
       ORDER BY leads DESC
       LIMIT 20
-    `).bind(cutoff).all();
+    `).bind(client.id, cutoff).all();
 
     const timeseries = buildTimeseries(leadsPerDay.results || [], stagesPerDay.results || []);
 

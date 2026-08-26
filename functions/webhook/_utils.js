@@ -2,13 +2,10 @@
 // Shared helpers for webhook adapters.
 //
 // The webhook URL shape is `/webhook/<provider>/<slug>`, where `<slug>` is a
-// 36-character UUID v4 (122 bits of entropy) generated per deployment and
-// stored as a Cloudflare secret. The adapter receives the slug via
-// `context.params.slug` and compares it to the env var.
-//
-// This is obscure-URL authentication: unguessable to scanners, simple to set
-// up (paste one URL into the uazapi instance's webhook config). Copied
-// verbatim from krob-tracking-stack-main — same contract, same guarantees.
+// 36-character UUID v4 (122 bits of entropy), one per CLIENT (not one per
+// deployment anymore - see functions/_shared/clients.js,
+// resolveClientByWebhookSlug). Unguessable to scanners, simple to set up
+// (paste one URL into that client's uazapi instance webhook config).
 // -----------------------------------------------------------------------------
 
 export function timingSafeEqual(a, b) {
@@ -19,29 +16,4 @@ export function timingSafeEqual(a, b) {
     result |= a.charCodeAt(i) ^ b.charCodeAt(i);
   }
   return result === 0;
-}
-
-// Guards a webhook adapter on the per-provider URL slug.
-//
-// Returns a Response on failure (caller should return it directly):
-//   - 500 if the env var is unset — a misconfigured deploy that should NOT
-//     silently accept traffic
-//   - 404 if the slug is missing or wrong — indistinguishable from the
-//     route not existing, so scanners learn nothing
-//
-// Returns null on success (caller proceeds to read body + parse payload).
-export function guardSlug(paramSlug, expectedSlug) {
-  if (!expectedSlug) {
-    return new Response(
-      JSON.stringify({ error: 'webhook not configured on this instance' }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
-    );
-  }
-  if (!paramSlug || !timingSafeEqual(paramSlug, expectedSlug)) {
-    return new Response(
-      JSON.stringify({ error: 'not found' }),
-      { status: 404, headers: { 'Content-Type': 'application/json' } }
-    );
-  }
-  return null;
 }

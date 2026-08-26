@@ -1,8 +1,10 @@
-// GET /api/whatsapp-contacts?key=...&status=lead&only_ctwa=1&search=5511&limit=100
+// GET /api/whatsapp-contacts?key=...&client=<slug>&status=lead&only_ctwa=1&search=5511&limit=100
 //
-// Dashboard "Conversas" tab — one row per WhatsApp contact with its current
-// lifecycle status. Source: whatsapp_contacts (the only mutable table in
-// this project).
+// Dashboard "Conversas" tab - one row per WhatsApp contact with its current
+// lifecycle status, scoped to one client (see functions/_shared/clients.js).
+// Source: whatsapp_contacts (the only mutable table in this project).
+
+import { resolveClientBySlug } from '../_shared/clients.js';
 
 export async function onRequestGet(context) {
   const { request, env } = context;
@@ -13,13 +15,18 @@ export async function onRequestGet(context) {
     return json({ error: 'Unauthorized' }, 401);
   }
 
+  const client = await resolveClientBySlug(env, url.searchParams.get('client'));
+  if (!client) {
+    return json({ error: 'client invalido ou nao informado' }, 400);
+  }
+
   const status = url.searchParams.get('status') || null;
   const onlyCtwa = url.searchParams.get('only_ctwa') === '1';
   const search = url.searchParams.get('search') || null;
   const limit = clampInt(url.searchParams.get('limit'), 100, 1, 500);
 
-  const clauses = [];
-  const binds = [];
+  const clauses = ['client_id = ?'];
+  const binds = [client.id];
   if (status) {
     clauses.push('status = ?');
     binds.push(status);
@@ -31,7 +38,7 @@ export async function onRequestGet(context) {
     clauses.push('phone LIKE ?');
     binds.push(`%${search.replace(/\D/g, '')}%`);
   }
-  const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+  const where = `WHERE ${clauses.join(' AND ')}`;
 
   try {
     const rows = await env.DB.prepare(`
@@ -50,8 +57,8 @@ export async function onRequestGet(context) {
     `).bind(...binds, limit).all();
 
     const counts = await env.DB.prepare(`
-      SELECT status, COUNT(*) as count FROM whatsapp_contacts GROUP BY status
-    `).all();
+      SELECT status, COUNT(*) as count FROM whatsapp_contacts WHERE client_id = ? GROUP BY status
+    `).bind(client.id).all();
 
     return json({
       contacts: rows.results || [],

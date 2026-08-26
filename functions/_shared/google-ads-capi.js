@@ -1,31 +1,40 @@
-// Google Ads API (v21 REST) — uploadClickConversions, ported from
+// Google Ads API (v21 REST) - uploadClickConversions, ported from
 // krob-tracking-stack-main/functions/webhook/_core.js (sendToGoogleAds),
 // generalized for a per-funnel-stage conversion instead of a per-product
-// Purchase. Same OAuth2 refresh-token flow, same env var names — a client
-// who already has krob-tracking-stack-main wired to their Google Ads
-// account can reuse the exact same GOOGLE_ADS_* credentials here.
+// Purchase.
+//
+// Multi-tenant: each client has their own Google Ads account/MCC and their
+// own OAuth app in most cases (see functions/_shared/clients.js -
+// getClientSecret), so the OAuth token cache below is keyed per client.id,
+// not a single module-level token like the original krob version.
 //
 // Pinning v21 in the URL: the Google Ads SDKs lag the REST API and break
-// with "API version not found" — call REST directly, same as krob does.
+// with "API version not found" - call REST directly, same as krob does.
 
 import { getConfigValues } from './client-config.js';
+import { getClientSecret } from './clients.js';
 
-let googleAdsTokenCache = { token: null, expiresAt: 0 };
+const googleAdsTokenCache = new Map(); // clientId -> { token, expiresAt }
 
-async function getGoogleAdsAccessToken(env) {
+async function getGoogleAdsAccessToken(env, client) {
   const now = Math.floor(Date.now() / 1000);
-  if (googleAdsTokenCache.token && googleAdsTokenCache.expiresAt > now + 30) {
-    return googleAdsTokenCache.token;
+  const cached = googleAdsTokenCache.get(client.id);
+  if (cached && cached.expiresAt > now + 30) {
+    return cached.token;
   }
+
+  const clientId = getClientSecret(env, client, 'GOOGLE_ADS_CLIENT_ID');
+  const clientSecret = getClientSecret(env, client, 'GOOGLE_ADS_CLIENT_SECRET');
+  const refreshToken = getClientSecret(env, client, 'GOOGLE_ADS_REFRESH_TOKEN');
 
   const resp = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       grant_type: 'refresh_token',
-      client_id: env.GOOGLE_ADS_CLIENT_ID,
-      client_secret: env.GOOGLE_ADS_CLIENT_SECRET,
-      refresh_token: env.GOOGLE_ADS_REFRESH_TOKEN,
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
     }),
   });
 
@@ -40,17 +49,17 @@ async function getGoogleAdsAccessToken(env) {
     return null;
   }
 
-  googleAdsTokenCache = {
+  googleAdsTokenCache.set(client.id, {
     token: data.access_token,
     expiresAt: now + (data.expires_in || 3600) - 60,
-  };
+  });
   return data.access_token;
 }
 
-// Format unix seconds → "YYYY-MM-DD HH:MM:SS±HH:MM" in the account's
+// Format unix seconds -> "YYYY-MM-DD HH:MM:SS+-HH:MM" in the account's
 // timezone. Google Ads rejects conversions whose timestamp precedes the
 // click with CONVERSION_PRECEDES_GCLID, so the offset must match the ad
-// account's TZ. Default matches krob's default (-03:00, São Paulo).
+// account's TZ. Default matches krob's default (-03:00, Sao Paulo).
 function formatConversionDateTime(unixSeconds, offsetString) {
   const tz = offsetString || '-03:00';
   const match = /^([+-])(\d{2}):(\d{2})$/.exec(tz);
@@ -69,12 +78,15 @@ function formatConversionDateTime(unixSeconds, offsetString) {
 }
 
 // conversionActionId: numeric Google Ads Conversion Action id (client- and
-// stage-specific, read from an env var by the caller — see
+// stage-specific, read from D1/env by the caller - see
 // STAGE_TO_GOOGLE_ADS_ENV_VAR in config/whatsapp.js).
-export async function sendGoogleAdsConversion({ conversionActionId, gclid, gbraid, wbraid, value, currency, eventTime, env }) {
-  // OAuth credentials + developer token are real secrets, Cloudflare-env-only.
-  if (!env.GOOGLE_ADS_DEVELOPER_TOKEN || !env.GOOGLE_ADS_CLIENT_ID ||
-      !env.GOOGLE_ADS_CLIENT_SECRET || !env.GOOGLE_ADS_REFRESH_TOKEN) {
+export async function sendGoogleAdsConversion({ conversionActionId, gclid, gbraid, wbraid, value, currency, eventTime, env, client }) {
+  // OAuth credentials + developer token are real secrets, Cloudflare-env-only, per client.
+  const developerToken = getClientSecret(env, client, 'GOOGLE_ADS_DEVELOPER_TOKEN');
+  const oauthClientId = getClientSecret(env, client, 'GOOGLE_ADS_CLIENT_ID');
+  const oauthClientSecret = getClientSecret(env, client, 'GOOGLE_ADS_CLIENT_SECRET');
+  const refreshToken = getClientSecret(env, client, 'GOOGLE_ADS_REFRESH_TOKEN');
+  if (!developerToken || !oauthClientId || !oauthClientSecret || !refreshToken) {
     return { skipped: 'missing google ads env', payload: null, response: null };
   }
   if (!conversionActionId) {
@@ -85,16 +97,16 @@ export async function sendGoogleAdsConversion({ conversionActionId, gclid, gbrai
   }
 
   // CUSTOMER_ID/LOGIN_CUSTOMER_ID are non-secret account ids, editable from
-  // the dashboard's "Configurações" tab (D1) — falls back to the env var
+  // the dashboard's "Configuracoes" tab (D1) - falls back to the env var
   // of the same name if never set there.
   const { GOOGLE_ADS_CUSTOMER_ID, GOOGLE_ADS_LOGIN_CUSTOMER_ID } = await getConfigValues(
-    env, ['GOOGLE_ADS_CUSTOMER_ID', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID']
+    env, ['GOOGLE_ADS_CUSTOMER_ID', 'GOOGLE_ADS_LOGIN_CUSTOMER_ID'], client.id
   );
   if (!GOOGLE_ADS_CUSTOMER_ID || !GOOGLE_ADS_LOGIN_CUSTOMER_ID) {
     return { skipped: 'missing google ads customer id', payload: null, response: null };
   }
 
-  const accessToken = await getGoogleAdsAccessToken(env);
+  const accessToken = await getGoogleAdsAccessToken(env, client);
   if (!accessToken) {
     return { skipped: 'oauth token unavailable', payload: null, response: null };
   }
@@ -104,7 +116,7 @@ export async function sendGoogleAdsConversion({ conversionActionId, gclid, gbrai
 
   const conversion = {
     conversionAction: `customers/${customerId}/conversionActions/${conversionActionId}`,
-    conversionDateTime: formatConversionDateTime(eventTime, env.TIMEZONE_OFFSET),
+    conversionDateTime: formatConversionDateTime(eventTime, getClientSecret(env, client, 'TIMEZONE_OFFSET')),
     conversionValue: parseFloat(value) || 0,
     currencyCode: currency || 'BRL',
   };
@@ -121,7 +133,7 @@ export async function sendGoogleAdsConversion({ conversionActionId, gclid, gbrai
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${accessToken}`,
-        'developer-token': env.GOOGLE_ADS_DEVELOPER_TOKEN,
+        'developer-token': developerToken,
         'login-customer-id': loginCustomerId,
         'Content-Type': 'application/json',
       },
