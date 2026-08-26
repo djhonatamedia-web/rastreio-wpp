@@ -33,6 +33,12 @@ contato é criado normalmente, só sem atribuição Google (fica como
 orgânico). Não tem como evitar isso com essa técnica; é a mesma categoria
 de limitação de uma mensagem genuinamente orgânica não ter `ctwa_clid`.
 
+Uma implantação só (`rastreio-wpp.pages.dev`) atende todos os clientes —
+ver `docs/multi-tenant.md`. O snippet abaixo identifica de qual cliente é
+o clique via `client` (o slug cadastrado na aba "Clientes" do dashboard),
+do mesmo jeito que já hardcoda o número de WhatsApp daquele cliente no
+botão.
+
 ## Snippet de referência pra landing page
 
 ```html
@@ -52,10 +58,11 @@ de limitação de uma mensagem genuinamente orgânica não ter `ctwa_clid`.
     return 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'[Math.floor(Math.random() * 36)];
   }).join('');
 
-  fetch('https://<pages-do-cliente>.pages.dev/api/track-click', {
+  fetch('https://rastreio-wpp.pages.dev/api/track-click', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
+      client: '<slug-do-cliente>', // mesmo slug da aba "Clientes" do dashboard
       code: code, gclid: gclid, gbraid: gbraid, wbraid: wbraid,
       utm_source: rawParam('utm_source'), utm_medium: rawParam('utm_medium'),
       utm_campaign: rawParam('utm_campaign'), utm_content: rawParam('utm_content'),

@@ -52,7 +52,7 @@
       <div class="flex items-center gap-3">
         <div class="w-9 h-9 rounded-lg bg-[color:var(--accent-green)] text-white flex items-center justify-center font-bold">W</div>
         <div>
-          <div class="font-semibold">Rastreio WPP</div>
+          <div class="font-semibold">Rastreio WPP <span id="header-client-name" class="text-[color:var(--accent-green)]"></span></div>
           <div class="text-xs text-[color:var(--muted)]">Rastreamento de campanhas Clique-para-WhatsApp</div>
         </div>
       </div>
@@ -324,6 +324,12 @@
     const url = new URL(location.href);
     url.searchParams.set('client', currentClient);
     history.replaceState(null, '', url);
+
+    const client = allClients.find(c => c.slug === currentClient);
+    const label = client ? client.name : '';
+    document.getElementById('header-client-name').textContent = label ? `· ${label}` : '';
+    document.title = label ? `${label} — Rastreio WPP` : 'Rastreio WPP';
+
     loadStats();
     loadContacts();
     loadEvents();

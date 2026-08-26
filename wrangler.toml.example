@@ -17,19 +17,39 @@ database_id = "__REPLACE_ME_DB_ID__"
 # Cloudflare dashboard (Pages project → Settings → Environment variables /
 # Bindings, D1 binding MUST be named `DB`).
 #
-# Required environment variables:
-#   META_PIXEL_ID           Meta Pixel ID linked to the WhatsApp Business
-#                            Account in Events Manager
-#   META_ACCESS_TOKEN       Meta CAPI long-lived access token
-#   META_PAGE_ID             Facebook Page ID connected to the WhatsApp
-#                            number (required by the business_messaging
-#                            CAPI payload's user_data.page_id)
-#   DASH_KEY                Random string gating /dash and GET /api/*
-#   WHATSAPP_WEBHOOK_SLUG    UUID v4 — paste the full
-#                            /webhook/whatsapp/<slug> URL into the uazapi
-#                            instance's webhook configuration
+# Multi-tenant (see docs/multi-tenant.md): one deployment serves every
+# client, rows in D1 are scoped by client_id, and clients themselves live
+# in the `clients` table (name/slug/webhook_slug), not as env vars.
 #
-# Optional:
+#   DASH_KEY                One shared key for the whole agency — gates
+#                            /dash and every /api/*, sees every client via
+#                            the dashboard's client switcher. NOT per client.
+#   WHATSAPP_WEBHOOK_SLUG    No longer read by the code — each client's
+#                            webhook slug lives in the `clients` table
+#                            instead (set when the client is created from
+#                            the dashboard's "Clientes" tab). Kept here only
+#                            because Cloudflare Pages projects created
+#                            before multi-tenant may still have it set;
+#                            safe to remove.
+#
+# Per-client real credentials: Cloudflare env var, prefixed with that
+# client's slug in upper case (functions/_shared/clients.js,
+# getClientSecret) — e.g. for slug "tintim":
+#   TINTIM_META_ACCESS_TOKEN
+#   TINTIM_GOOGLE_ADS_CLIENT_ID / _CLIENT_SECRET / _REFRESH_TOKEN / _DEVELOPER_TOKEN
+# A client created before multi-tenant existed keeps working off the
+# unprefixed name (getClientSecret falls back to env[name] with no
+# prefix) — only new clients need the prefix from day one:
+#   META_ACCESS_TOKEN, GOOGLE_ADS_CLIENT_ID, GOOGLE_ADS_CLIENT_SECRET,
+#   GOOGLE_ADS_REFRESH_TOKEN, GOOGLE_ADS_DEVELOPER_TOKEN
+#
+# Non-secret ad-platform ids (META_PIXEL_ID, META_PAGE_ID,
+# GOOGLE_ADS_CUSTOMER_ID, GOOGLE_ADS_LOGIN_CUSTOMER_ID,
+# GOOGLE_ADS_CONVERSION_ACTION_*) are normally set per client from the
+# dashboard's "Configurações" tab (D1, docs/client-config.md), not here —
+# these env vars are only the fallback for a client with no D1 row yet.
+#
+# Optional (shared across all clients, not prefixed):
 #   META_TEST_EVENT_CODE    Meta Events Manager Test Events code (use while
 #                            validating Fase 0 / before going live)
 #   DEFAULT_COUNTRY_CODE    Calling code prepended to local-format phone

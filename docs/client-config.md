@@ -31,9 +31,18 @@ Conversion Action ID), pode ir pro D1/dashboard.
 
 ## Como funciona o fallback
 
-`getConfigValues(env, keys)` (`functions/_shared/client-config.js`) olha
-primeiro a tabela `client_config` no D1; se a chave não estiver lá (ou
-`migrations/0005_client_config.sql` ainda não rodou), cai pro `env[key]`
-do Cloudflare. Isso significa que uma implantação existente, com tudo só
-em env var, continua funcionando sem nenhuma mudança — a aba
-"Configurações" é opcional, não obrigatória.
+`getConfigValues(env, keys, clientId)` (`functions/_shared/client-config.js`)
+olha primeiro a tabela `client_config` no D1, filtrando por `client_id`
+(chave composta `(client_id, key)` desde a migration `0006_multi_tenant.sql`
+— ver `docs/multi-tenant.md`); se a chave não estiver lá pra aquele
+cliente (ou a tabela ainda não existir), cai pro `env[key]` do Cloudflare,
+sem prefixo. Isso significa que um cliente sem nenhuma linha em
+`client_config` continua funcionando sem nenhuma mudança — a aba
+"Configurações" é opcional, não obrigatória, e o `client_id` é sempre
+resolvido a partir do slug pelo `functions/_shared/clients.js`, nunca
+aceito cru do request.
+
+Diferente dos IDs (D1 por cliente), a credencial real segue outro
+caminho: `getClientSecret(env, client, name)` monta o nome da env var
+prefixado com o slug do cliente (`<SLUG>_META_ACCESS_TOKEN` etc.) e cai
+pro nome sem prefixo se não existir — ver `docs/multi-tenant.md`.
