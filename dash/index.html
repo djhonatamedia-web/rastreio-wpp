@@ -4,284 +4,570 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Rastreio WPP</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <style>
   :root {
-    --bg: #f7f7f8;
-    --card: #ffffff;
-    --border: #e4e4e7;
-    --text: #18181b;
-    --dim: #52525b;
-    --muted: #a1a1aa;
-    --accent-green:  #16a34a;
-    --accent-blue:   #2563eb;
-    --accent-amber:  #d97706;
-    --accent-purple: #7c3aed;
-    --accent-red:    #dc2626;
+    --bg: #f7f8fa;
+    --surface: #ffffff;
+    --surface-hover: #f2f3f6;
+    --sidebar-bg: #ffffff;
+    --border: #e6e8ec;
+    --border-strong: #d7dae0;
+    --text: #15171c;
+    --text-dim: #565b66;
+    --text-muted: #9297a3;
+    --accent: #0f9d63;
+    --accent-hover: #0c7f50;
+    --accent-soft: #e3f6ec;
+    --accent-contrast: #ffffff;
+    --shadow-sm: 0 1px 2px rgba(15,23,42,0.06);
+    --shadow-md: 0 8px 24px rgba(15,23,42,0.10);
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+
+    --stage-lead-bg: #eef0f3;      --stage-lead-text: #4b505c;
+    --stage-qualified-bg: #e7edfe; --stage-qualified-text: #2454d6;
+    --stage-scheduled-bg: #fdf1dd; --stage-scheduled-text: #96650a;
+    --stage-sale-bg: var(--accent-soft); --stage-sale-text: var(--accent-hover);
+    --stage-lost-bg: #fdeaea;      --stage-lost-text: #c0292c;
+
+    --chart-leads: #2f6fed;
+    --chart-qualified: #7c5cfc;
+    --chart-scheduled: #d98a1f;
+    --chart-sale: #0f9d63;
+
+    --font-ui: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   }
-  html, body { background: var(--bg); color: var(--text); font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-  .mono { font-family: "JetBrains Mono", "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; }
-  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; }
-  .dash-tab { padding: 0.5rem 0.875rem; font-size: 0.875rem; border-bottom: 2px solid transparent; color: var(--dim); cursor: pointer; }
-  .dash-tab.active { color: var(--text); border-color: var(--accent-green); font-weight: 600; }
-  .row-hover:hover { background: #fafafa; }
-  .badge { display: inline-block; padding: 0.125rem 0.5rem; border-radius: 999px; font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
-  .badge-lead { background: #e4e4e7; color: #3f3f46; }
-  .badge-qualified { background: #dbeafe; color: #1e40af; }
-  .badge-scheduled { background: #fef3c7; color: #92400e; }
-  .badge-sale { background: #dcfce7; color: #166534; }
-  .badge-lost { background: #fee2e2; color: #991b1b; }
-  .action-btn { font-size: 0.75rem; padding: 0.25rem 0.5rem; border-radius: 6px; border: 1px solid var(--border); background: white; cursor: pointer; }
-  .action-btn:hover { background: #f4f4f5; }
-  .action-btn.active-range { background: var(--accent-green); color: white; border-color: var(--accent-green); }
-  .fade-in { animation: fadeIn 0.3s ease-out; }
+  :root[data-theme="dark"] {
+    --bg: #0c0d10;
+    --surface: #15171c;
+    --surface-hover: #1b1e24;
+    --sidebar-bg: #111318;
+    --border: #24272e;
+    --border-strong: #32363f;
+    --text: #eef0f3;
+    --text-dim: #a7acb6;
+    --text-muted: #6d7280;
+    --accent: #22c55e;
+    --accent-hover: #16a34a;
+    --accent-soft: #123423;
+    --accent-contrast: #04150b;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.4);
+    --shadow-md: 0 12px 32px rgba(0,0,0,0.5);
+
+    --stage-lead-bg: #23262d;      --stage-lead-text: #c7cbd4;
+    --stage-qualified-bg: #1b2740; --stage-qualified-text: #8fb0fb;
+    --stage-scheduled-bg: #332707; --stage-scheduled-text: #f0bd5a;
+    --stage-sale-bg: var(--accent-soft); --stage-sale-text: var(--accent);
+    --stage-lost-bg: #341417;      --stage-lost-text: #ff8f8f;
+
+    --chart-leads: #6f9bff;
+    --chart-qualified: #a98bff;
+    --chart-scheduled: #eab55a;
+    --chart-sale: #22c55e;
+  }
+
+  html, body { background: var(--bg); color: var(--text); font-family: var(--font-ui); }
+  * { border-color: var(--border); }
+  .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+  ::selection { background: var(--accent-soft); color: var(--accent-hover); }
+
+  .icon { width: 1.05em; height: 1.05em; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; display: inline-block; vertical-align: -0.15em; flex-shrink: 0; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+  .input {
+    border: 1px solid var(--border); background: var(--surface); color: var(--text);
+    border-radius: var(--radius-sm); padding: 0.5rem 0.75rem; font-size: 0.875rem; font-family: inherit;
+  }
+  .input::placeholder { color: var(--text-muted); }
+  .input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  input[type="checkbox"] { accent-color: var(--accent); }
+
+  /* ---- Layout shell ---- */
+  .shell { display: flex; min-height: 100vh; }
+  .sidebar {
+    width: 15rem; flex-shrink: 0; background: var(--sidebar-bg); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; position: fixed; inset-block: 0; left: 0; z-index: 40;
+  }
+  .main-area { margin-left: 15rem; flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .content-inner { max-width: 84rem; width: 100%; margin: 0 auto; padding: 1.5rem 2rem 3rem; }
+  .sidebar-overlay { position: fixed; inset: 0; background: rgba(10,12,16,0.5); z-index: 30; display: none; }
+  .sidebar-toggle { display: none; }
+  @media (max-width: 1023px) {
+    .sidebar { transform: translateX(-100%); transition: transform 0.2s ease; }
+    .sidebar.sidebar-open { transform: translateX(0); box-shadow: var(--shadow-md); }
+    .main-area { margin-left: 0; }
+    .sidebar-toggle { display: inline-flex; }
+    .sidebar-overlay.overlay-visible { display: block; }
+  }
+
+  .sidebar-brand { display: flex; align-items: center; gap: 0.625rem; padding: 1.125rem 1.125rem 0.875rem; }
+  .brand-mark { width: 2rem; height: 2rem; border-radius: var(--radius-sm); background: var(--accent); color: var(--accent-contrast); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .brand-name { font-weight: 700; font-size: 0.9375rem; line-height: 1.1; }
+  .brand-sub { font-size: 0.6875rem; color: var(--text-muted); }
+
+  .workspace-wrap { padding: 0 0.75rem; margin-bottom: 0.5rem; position: relative; }
+  .workspace-btn {
+    width: 100%; display: flex; align-items: center; gap: 0.625rem; padding: 0.5rem 0.625rem;
+    border-radius: var(--radius-md); border: 1px solid var(--border); background: var(--surface);
+    cursor: pointer; text-align: left; font-family: inherit; color: var(--text);
+  }
+  .workspace-btn:hover { background: var(--surface-hover); }
+  .avatar {
+    width: 1.75rem; height: 1.75rem; border-radius: 50%; color: #fff; font-size: 0.6875rem; font-weight: 700;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0; letter-spacing: 0.02em;
+  }
+  .avatar-sm { width: 1.375rem; height: 1.375rem; font-size: 0.5625rem; }
+  #workspace-name { flex: 1; min-width: 0; font-size: 0.8125rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .workspace-panel {
+    position: absolute; top: calc(100% + 0.375rem); left: 0.75rem; right: 0.75rem; background: var(--surface);
+    border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-md);
+    padding: 0.375rem; z-index: 50; max-height: 18rem; overflow-y: auto;
+  }
+  .dropdown-item {
+    width: 100%; display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.5rem; border-radius: var(--radius-sm);
+    background: none; border: none; cursor: pointer; font-family: inherit; color: var(--text); font-size: 0.8125rem;
+  }
+  .dropdown-item:hover { background: var(--surface-hover); }
+  .dropdown-divider { height: 1px; background: var(--border); margin: 0.25rem 0.125rem; }
+
+  .nav-list { padding: 0.5rem 0.75rem; display: flex; flex-direction: column; gap: 0.125rem; flex: 1; }
+  .nav-item {
+    display: flex; align-items: center; gap: 0.625rem; padding: 0.5rem 0.625rem; border-radius: var(--radius-sm);
+    color: var(--text-dim); font-size: 0.8125rem; font-weight: 500; cursor: pointer; border-left: 2px solid transparent;
+  }
+  .nav-item:hover { background: var(--surface-hover); color: var(--text); }
+  .nav-item.active { background: var(--accent-soft); color: var(--accent-hover); border-left-color: var(--accent); font-weight: 600; }
+
+  .sidebar-footer { padding: 0.75rem; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 0.25rem; }
+  .sidebar-footer-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.375rem 0.5rem; border-radius: var(--radius-sm); font-size: 0.75rem; color: var(--text-dim); }
+  .sidebar-footer-btn { display: flex; align-items: center; gap: 0.5rem; background: none; border: none; cursor: pointer; color: var(--text-dim); font-family: inherit; font-size: 0.75rem; padding: 0.375rem 0.5rem; border-radius: var(--radius-sm); width: 100%; text-align: left; }
+  .sidebar-footer-btn:hover { background: var(--surface-hover); color: var(--text); }
+
+  .switch { position: relative; display: inline-block; width: 2.125rem; height: 1.1875rem; flex-shrink: 0; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch .slider { position: absolute; inset: 0; background: var(--border-strong); border-radius: 999px; transition: background 0.15s; cursor: pointer; }
+  .switch .slider::before { content: ''; position: absolute; width: 0.9375rem; height: 0.9375rem; left: 0.125rem; top: 0.125rem; background: #fff; border-radius: 50%; transition: transform 0.15s; box-shadow: var(--shadow-sm); }
+  .switch input:checked + .slider { background: var(--accent); }
+  .switch input:checked + .slider::before { transform: translateX(0.9375rem); }
+
+  /* ---- Topbar ---- */
+  .topbar { position: sticky; top: 0; z-index: 20; background: var(--bg); border-bottom: 1px solid var(--border); }
+  .topbar-inner { max-width: 84rem; margin: 0 auto; padding: 0.875rem 2rem; display: flex; align-items: center; gap: 0.75rem; }
+  #page-title { font-weight: 700; font-size: 1.0625rem; }
+  .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 2rem; height: 2rem; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface); color: var(--text-dim); cursor: pointer; }
+  .icon-btn:hover { background: var(--surface-hover); color: var(--text); }
+
+  /* ---- Generic components ---- */
+  .action-btn { font-size: 0.75rem; font-weight: 500; padding: 0.375rem 0.625rem; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface); color: var(--text-dim); cursor: pointer; font-family: inherit; white-space: nowrap; }
+  .action-btn:hover { background: var(--surface-hover); color: var(--text); }
+  .action-btn.active-range { background: var(--accent); color: var(--accent-contrast); border-color: var(--accent); }
+  .btn-primary { background: var(--accent); color: var(--accent-contrast); border: none; border-radius: var(--radius-sm); padding: 0.5rem 0.875rem; font-size: 0.8125rem; font-weight: 600; cursor: pointer; font-family: inherit; }
+  .btn-primary:hover { background: var(--accent-hover); }
+
+  .row-hover:hover { background: var(--surface-hover); }
+  .row-actions { display: flex; gap: 0.25rem; opacity: 0; transition: opacity 0.12s; }
+  tr:hover .row-actions, tr:focus-within .row-actions { opacity: 1; }
+
+  .badge { display: inline-flex; align-items: center; gap: 0.375rem; padding: 0.25rem 0.625rem; border-radius: 999px; font-size: 0.6875rem; font-weight: 600; white-space: nowrap; }
+  .badge::before { content: ''; width: 0.375rem; height: 0.375rem; border-radius: 999px; background: currentColor; flex-shrink: 0; }
+  .badge-lead { background: var(--stage-lead-bg); color: var(--stage-lead-text); }
+  .badge-qualified { background: var(--stage-qualified-bg); color: var(--stage-qualified-text); }
+  .badge-scheduled { background: var(--stage-scheduled-bg); color: var(--stage-scheduled-text); }
+  .badge-sale { background: var(--stage-sale-bg); color: var(--stage-sale-text); }
+  .badge-lost { background: var(--stage-lost-bg); color: var(--stage-lost-text); }
+
+  .fade-in { animation: fadeIn 0.25s ease-out; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-  .funnel-row { display: grid; grid-template-columns: 5.5rem 1fr 3rem; align-items: center; gap: 0.5rem; }
-  .funnel-track { height: 1.5rem; border-radius: 6px; background: #f4f4f5; overflow: hidden; }
-  .funnel-fill { height: 100%; border-radius: 6px; transition: width 0.4s ease-out; }
-  .ad-thumb { width: 2.25rem; height: 2.25rem; border-radius: 6px; object-fit: cover; background: #f4f4f5; flex-shrink: 0; }
+
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); gap: 0.75rem; }
+  .kpi-card { display: flex; align-items: center; gap: 0.75rem; padding: 0.875rem 1rem; }
+  .kpi-icon { width: 2.25rem; height: 2.25rem; border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .kpi-icon-lead { background: var(--stage-lead-bg); color: var(--stage-lead-text); }
+  .kpi-icon-qualified { background: var(--stage-qualified-bg); color: var(--stage-qualified-text); }
+  .kpi-icon-scheduled { background: var(--stage-scheduled-bg); color: var(--stage-scheduled-text); }
+  .kpi-icon-sale { background: var(--stage-sale-bg); color: var(--stage-sale-text); }
+  .kpi-icon-lost { background: var(--stage-lost-bg); color: var(--stage-lost-text); }
+  .kpi-label { font-size: 0.6875rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; }
+  .kpi-value { font-size: 1.25rem; font-weight: 700; margin-top: 0.125rem; }
+
+  .funnel-connector { padding: 0.125rem 0 0.125rem 5.5rem; font-size: 0.6875rem; color: var(--text-muted); }
+  .funnel-row { display: grid; grid-template-columns: 5.5rem 1fr 3rem; align-items: center; gap: 0.625rem; }
+  .funnel-label { font-size: 0.75rem; color: var(--text-dim); }
+  .funnel-track { height: 1.375rem; border-radius: var(--radius-sm); background: var(--surface-hover); overflow: hidden; display: flex; }
+  .funnel-fill { height: 100%; transition: width 0.4s ease-out; }
+  .funnel-total { font-size: 0.875rem; font-weight: 700; text-align: right; }
+
+  .ad-thumb { width: 2.25rem; height: 2.25rem; border-radius: var(--radius-sm); object-fit: cover; background: var(--surface-hover); flex-shrink: 0; }
   .ad-thumb-sm { width: 1.5rem; height: 1.5rem; border-radius: 4px; object-fit: cover; flex-shrink: 0; }
+
+  .callout { display: flex; gap: 0.75rem; padding: 0.875rem 1rem; border-radius: var(--radius-md); background: var(--accent-soft); color: var(--text-dim); font-size: 0.8125rem; line-height: 1.5; }
+  .callout .icon { color: var(--accent); margin-top: 0.125rem; }
+  .callout-warning { background: var(--stage-lost-bg); color: var(--stage-lost-text); }
+  .callout-warning .icon { color: var(--stage-lost-text); }
+
+  .table-scroll { max-height: 65vh; overflow-y: auto; }
+  table thead th { position: sticky; top: 0; background: var(--surface); z-index: 1; }
+
+  .skeleton-bar { height: 0.8125rem; border-radius: 4px; width: 100%; background: linear-gradient(90deg, var(--border) 25%, var(--border-strong) 37%, var(--border) 63%); background-size: 400% 100%; animation: skeletonLoading 1.4s ease infinite; }
+  @keyframes skeletonLoading { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+
+  .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.5rem; padding: 2.5rem 1rem; color: var(--text-muted); }
+  .empty-state .icon { width: 1.75em; height: 1.75em; opacity: 0.6; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .fade-in, .skeleton-bar, .funnel-fill, .sidebar { animation: none !important; transition: none !important; }
+  }
 </style>
 </head>
 <body>
 
-<div id="app" class="hidden min-h-screen">
-  <header class="border-b border-[color:var(--border)] bg-white">
-    <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        <div class="w-9 h-9 rounded-lg bg-[color:var(--accent-green)] text-white flex items-center justify-center font-bold">W</div>
+<!-- Icon sprite -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="icon-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
+    <symbol id="icon-chat" viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></symbol>
+    <symbol id="icon-activity" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9-4-18-3 9H2"/></symbol>
+    <symbol id="icon-tag" viewBox="0 0 24 24"><path d="M20.59 13.41 13.41 20.59a2 2 0 0 1-2.82 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><circle cx="7" cy="7" r="1"/></symbol>
+    <symbol id="icon-sliders" viewBox="0 0 24 24"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></symbol>
+    <symbol id="icon-users" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+    <symbol id="icon-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></symbol>
+    <symbol id="icon-refresh" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></symbol>
+    <symbol id="icon-plus" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></symbol>
+    <symbol id="icon-trash" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+    <symbol id="icon-chevron-down" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></symbol>
+    <symbol id="icon-check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></symbol>
+    <symbol id="icon-x" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></symbol>
+    <symbol id="icon-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></symbol>
+    <symbol id="icon-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></symbol>
+    <symbol id="icon-moon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></symbol>
+    <symbol id="icon-menu" viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></symbol>
+    <symbol id="icon-inbox" viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></symbol>
+    <symbol id="icon-calendar" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></symbol>
+    <symbol id="icon-dollar" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></symbol>
+    <symbol id="icon-key" viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="5.5"/><path d="M21 2l-9.6 9.6"/><path d="M15.5 7.5 19 11"/><path d="M18 4l3 3"/></symbol>
+  </defs>
+</svg>
+
+<div id="app" class="hidden">
+  <div class="shell">
+
+    <div id="sidebar-overlay" class="sidebar-overlay" onclick="toggleSidebar(false)"></div>
+
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-mark"><svg class="icon"><use href="#icon-chat"/></svg></div>
         <div>
-          <div class="font-semibold">Rastreio WPP <span id="header-client-name" class="text-[color:var(--accent-green)]"></span></div>
-          <div class="text-xs text-[color:var(--muted)]">Rastreamento de campanhas Clique-para-WhatsApp</div>
+          <div class="brand-name">Rastreio WPP</div>
+          <div class="brand-sub">Clique-para-WhatsApp</div>
         </div>
       </div>
-      <div class="flex items-center gap-3">
-        <select id="client-switcher" class="border border-[color:var(--border)] rounded-lg px-2 py-1.5 text-sm mono max-w-[10rem]"></select>
-        <label class="flex items-center gap-2 text-xs text-[color:var(--dim)]">
-          <input type="checkbox" id="auto-refresh" class="rounded">
-          auto-refresh 10s
-        </label>
+
+      <div class="workspace-wrap">
+        <button id="workspace-btn" class="workspace-btn" onclick="toggleWorkspacePanel()">
+          <span id="workspace-avatar" class="avatar">?</span>
+          <span id="workspace-name">Carregando...</span>
+          <svg class="icon" style="color:var(--text-muted)"><use href="#icon-chevron-down"/></svg>
+        </button>
+        <div id="workspace-panel" class="workspace-panel hidden"></div>
       </div>
+
+      <nav class="nav-list">
+        <div class="nav-item active" data-tab="visao-geral"><svg class="icon"><use href="#icon-grid"/></svg><span>Visão Geral</span></div>
+        <div class="nav-item" data-tab="conversas"><svg class="icon"><use href="#icon-chat"/></svg><span>Conversas</span></div>
+        <div class="nav-item" data-tab="eventos"><svg class="icon"><use href="#icon-activity"/></svg><span>Eventos</span></div>
+        <div class="nav-item" data-tab="keywords"><svg class="icon"><use href="#icon-tag"/></svg><span>Palavras-chave</span></div>
+        <div class="nav-item" data-tab="config"><svg class="icon"><use href="#icon-sliders"/></svg><span>Configurações</span></div>
+        <div class="nav-item" data-tab="clientes"><svg class="icon"><use href="#icon-users"/></svg><span>Clientes</span></div>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="sidebar-footer-row">
+          <span style="display:flex;align-items:center;gap:0.5rem"><svg class="icon"><use href="#icon-refresh"/></svg>Auto-refresh 10s</span>
+          <label class="switch"><input type="checkbox" id="auto-refresh"><span class="slider"></span></label>
+        </div>
+        <button id="theme-toggle" class="sidebar-footer-btn" onclick="toggleTheme()">
+          <svg id="theme-icon-sun" class="icon"><use href="#icon-sun"/></svg>
+          <svg id="theme-icon-moon" class="icon hidden"><use href="#icon-moon"/></svg>
+          <span>Alternar tema</span>
+        </button>
+      </div>
+    </aside>
+
+    <div class="main-area">
+      <div class="topbar">
+        <div class="topbar-inner">
+          <button class="icon-btn sidebar-toggle" onclick="toggleSidebar()"><svg class="icon"><use href="#icon-menu"/></svg></button>
+          <div id="page-title">Visão Geral</div>
+        </div>
+      </div>
+
+      <main class="content-inner">
+
+        <!-- Visão Geral tab -->
+        <section id="tab-visao-geral" class="fade-in space-y-6">
+          <div class="flex items-center gap-2">
+            <span class="text-xs uppercase tracking-wider" style="color:var(--text-muted)">Período</span>
+            <div id="range-selector" class="flex gap-1">
+              <button class="action-btn" data-days="7">7d</button>
+              <button class="action-btn" data-days="14">14d</button>
+              <button class="action-btn active-range" data-days="30">30d</button>
+              <button class="action-btn" data-days="60">60d</button>
+            </div>
+          </div>
+
+          <div class="card p-4">
+            <div class="flex items-center justify-between mb-3">
+              <div class="font-semibold text-sm">Funil</div>
+              <div class="flex items-center gap-3 text-xs" style="color:var(--text-dim)">
+                <span class="flex items-center gap-1"><span class="inline-block w-2.5 h-2.5 rounded-sm" style="background:var(--chart-leads)"></span>Anúncios</span>
+                <span class="flex items-center gap-1"><span class="inline-block w-2.5 h-2.5 rounded-sm" style="background:var(--text-muted)"></span>Orgânico</span>
+              </div>
+            </div>
+            <div id="funnel" class="space-y-1"></div>
+          </div>
+
+          <div class="card p-4">
+            <div class="font-semibold text-sm mb-3">Evolução diária</div>
+            <div style="height: 260px"><canvas id="evolution-chart"></canvas></div>
+          </div>
+
+          <div class="card p-4">
+            <div class="font-semibold text-sm mb-3">Por anúncio</div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="text-left text-xs uppercase tracking-wider border-b" style="color:var(--text-muted)">
+                    <th class="py-2 pr-3">Anúncio</th>
+                    <th class="py-2 pr-3">Leads</th>
+                    <th class="py-2 pr-3">Qualificados</th>
+                    <th class="py-2 pr-3">Vendas</th>
+                    <th class="py-2 pr-3">Conversão</th>
+                  </tr>
+                </thead>
+                <tbody id="by-ad-body" class="mono"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- Conversas tab -->
+        <section id="tab-conversas" class="fade-in hidden space-y-4">
+          <div class="kpi-grid" id="status-counts"></div>
+
+          <div class="card p-4">
+            <div class="flex items-center gap-3 mb-3">
+              <input id="conversas-search" type="text" placeholder="Buscar por telefone" class="input flex-1 max-w-xs">
+              <label class="flex items-center gap-2 text-sm" style="color:var(--text-dim)">
+                <input type="checkbox" id="conversas-only-ctwa"> só CTWA
+              </label>
+              <button class="action-btn ml-auto" onclick="loadContacts()"><svg class="icon"><use href="#icon-refresh"/></svg></button>
+            </div>
+            <div class="table-scroll overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="text-left text-xs uppercase tracking-wider border-b" style="color:var(--text-muted)">
+                    <th class="py-2 pr-3">Telefone</th>
+                    <th class="py-2 pr-3">Nome</th>
+                    <th class="py-2 pr-3">Status</th>
+                    <th class="py-2 pr-3">Anúncio</th>
+                    <th class="py-2 pr-3">Primeira mensagem</th>
+                    <th class="py-2 pr-3">Recebido</th>
+                    <th class="py-2 pr-3">Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="conversas-body" class="mono"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- Eventos tab -->
+        <section id="tab-eventos" class="fade-in hidden">
+          <div class="card p-4">
+            <div class="flex items-center gap-3 mb-3">
+              <input id="eventos-search" type="text" placeholder="Buscar por telefone" class="input flex-1 max-w-xs">
+              <label class="flex items-center gap-2 text-sm" style="color:var(--text-dim)">
+                <input type="checkbox" id="eventos-only-ctwa"> só CTWA
+              </label>
+              <button class="action-btn ml-auto" onclick="loadEvents()"><svg class="icon"><use href="#icon-refresh"/></svg></button>
+            </div>
+            <div class="text-xs mb-2" style="color:var(--text-muted)">Cada webhook do uazapi capturado, mensagem por mensagem.</div>
+            <div class="table-scroll overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="text-left text-xs uppercase tracking-wider border-b" style="color:var(--text-muted)">
+                    <th class="py-2 pr-3">ID</th>
+                    <th class="py-2 pr-3">Recebido</th>
+                    <th class="py-2 pr-3">Nome</th>
+                    <th class="py-2 pr-3">Telefone</th>
+                    <th class="py-2 pr-3">Tipo</th>
+                    <th class="py-2 pr-3">Evento</th>
+                    <th class="py-2 pr-3">CAPI</th>
+                  </tr>
+                </thead>
+                <tbody id="eventos-body" class="mono"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- Palavras-chave tab -->
+        <section id="tab-keywords" class="fade-in hidden space-y-4">
+          <div class="callout">
+            <svg class="icon"><use href="#icon-info"/></svg>
+            <div>
+              Quando você (o atendente) escreve uma dessas frases numa conversa, o
+              estágio muda sozinho e o evento correspondente é enviado à Meta —
+              igual clicar no botão manualmente. Maiúsculas/minúsculas e acentos
+              não importam. Só conta o que <strong>você</strong> escreve, nunca o
+              que o lead escreve.
+            </div>
+          </div>
+          <div class="grid md:grid-cols-3 gap-4" id="keywords-board"></div>
+        </section>
+
+        <!-- Configurações tab -->
+        <section id="tab-config" class="fade-in hidden space-y-4">
+          <div class="callout">
+            <svg class="icon"><use href="#icon-info"/></svg>
+            <div>
+              IDs não-secretos do Meta e do Google Ads — Pixel ID, Page ID, conta
+              e Conversion Actions. Salvar aqui sobrepõe a variável de ambiente
+              do Cloudflare com o mesmo nome; "Restaurar padrão" volta a usar a
+              variável de ambiente. Tokens de acesso reais continuam só no
+              Cloudflare Pages, não aparecem aqui.
+            </div>
+          </div>
+          <div id="config-migration-warning" class="hidden callout callout-warning">
+            <svg class="icon"><use href="#icon-x"/></svg>
+            <div>A tabela <code class="mono">client_config</code> ainda não existe no banco — rode
+            <code class="mono">migrations/0005_client_config.sql</code> no D1 Console antes de salvar algo aqui.</div>
+          </div>
+          <div class="card p-4">
+            <div class="font-semibold text-sm mb-3">Meta</div>
+            <div class="space-y-3" id="config-fields-meta"></div>
+          </div>
+          <div class="card p-4">
+            <div class="font-semibold text-sm mb-3">Google Ads</div>
+            <div class="space-y-3" id="config-fields-google"></div>
+          </div>
+        </section>
+
+        <!-- Clientes tab -->
+        <section id="tab-clientes" class="fade-in hidden space-y-4">
+          <div class="callout">
+            <svg class="icon"><use href="#icon-info"/></svg>
+            <div>
+              Cada cliente tem sua própria URL de webhook e suas próprias
+              credenciais reais (token de acesso Meta, refresh token do Google
+              Ads) — essas ficam só no Cloudflare Pages, como variável de
+              ambiente com o prefixo do slug abaixo (ex.:
+              <code class="mono">TINTIM_META_ACCESS_TOKEN</code>). IDs
+              não-secretos (Pixel, Customer, Conversion Action) ficam na aba
+              "Configurações", um cliente de cada vez.
+            </div>
+          </div>
+          <div class="card p-4">
+            <div class="font-semibold text-sm mb-3">Novo cliente</div>
+            <div class="flex gap-2 flex-wrap items-end">
+              <div>
+                <label class="text-xs block mb-1" style="color:var(--text-dim)">Nome</label>
+                <input type="text" id="new-client-name" placeholder="ex: Tintim" class="input">
+              </div>
+              <div>
+                <label class="text-xs block mb-1" style="color:var(--text-dim)">Slug</label>
+                <input type="text" id="new-client-slug" placeholder="ex: tintim" class="input mono">
+              </div>
+              <button class="btn-primary" onclick="createClient()">Criar</button>
+            </div>
+          </div>
+          <div class="card p-4">
+            <div class="font-semibold text-sm mb-3">Clientes cadastrados</div>
+            <div id="clients-list" class="space-y-3"></div>
+          </div>
+        </section>
+
+      </main>
     </div>
-    <div class="max-w-7xl mx-auto px-6 flex gap-1">
-      <div class="dash-tab active" data-tab="visao-geral">Visão Geral</div>
-      <div class="dash-tab" data-tab="conversas">Conversas</div>
-      <div class="dash-tab" data-tab="eventos">Eventos</div>
-      <div class="dash-tab" data-tab="keywords">Palavras-chave</div>
-      <div class="dash-tab" data-tab="config">Configurações</div>
-      <div class="dash-tab" data-tab="clientes">Clientes</div>
-    </div>
-  </header>
-
-  <main class="max-w-7xl mx-auto px-6 py-6 space-y-6">
-
-    <!-- Visão Geral tab -->
-    <section id="tab-visao-geral" class="fade-in space-y-6">
-      <div class="flex items-center gap-2">
-        <span class="text-xs text-[color:var(--muted)] uppercase tracking-wider">Período</span>
-        <div id="range-selector" class="flex gap-1">
-          <button class="action-btn" data-days="7">7d</button>
-          <button class="action-btn" data-days="14">14d</button>
-          <button class="action-btn active-range" data-days="30">30d</button>
-          <button class="action-btn" data-days="60">60d</button>
-        </div>
-      </div>
-
-      <div class="card p-4">
-        <div class="flex items-center justify-between mb-3">
-          <div class="font-semibold text-sm">Funil</div>
-          <div class="flex items-center gap-3 text-xs text-[color:var(--dim)]">
-            <span class="flex items-center gap-1"><span class="inline-block w-2.5 h-2.5 rounded-sm" style="background:var(--accent-blue)"></span>Anúncios</span>
-            <span class="flex items-center gap-1"><span class="inline-block w-2.5 h-2.5 rounded-sm" style="background:var(--muted)"></span>Orgânico</span>
-          </div>
-        </div>
-        <div id="funnel" class="space-y-2"></div>
-      </div>
-
-      <div class="card p-4">
-        <div class="font-semibold text-sm mb-3">Evolução diária</div>
-        <div style="height: 260px"><canvas id="evolution-chart"></canvas></div>
-      </div>
-
-      <div class="card p-4">
-        <div class="font-semibold text-sm mb-3">Por anúncio</div>
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm">
-            <thead>
-              <tr class="text-left text-xs text-[color:var(--muted)] uppercase tracking-wider border-b border-[color:var(--border)]">
-                <th class="py-2 pr-3">Anúncio</th>
-                <th class="py-2 pr-3">Leads</th>
-                <th class="py-2 pr-3">Qualificados</th>
-                <th class="py-2 pr-3">Vendas</th>
-                <th class="py-2 pr-3">Conversão</th>
-              </tr>
-            </thead>
-            <tbody id="by-ad-body" class="mono"></tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-    <!-- Conversas tab -->
-    <section id="tab-conversas" class="fade-in hidden">
-      <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4" id="status-counts">
-        <!-- filled by JS -->
-      </div>
-
-      <div class="card p-4">
-        <div class="flex items-center gap-3 mb-3">
-          <input id="conversas-search" type="text" placeholder="Buscar por telefone" class="border border-[color:var(--border)] rounded-lg px-3 py-1.5 text-sm flex-1 max-w-xs">
-          <label class="flex items-center gap-2 text-sm text-[color:var(--dim)]">
-            <input type="checkbox" id="conversas-only-ctwa" class="rounded"> só CTWA
-          </label>
-          <button class="action-btn ml-auto" onclick="loadContacts()">Atualizar</button>
-        </div>
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm">
-            <thead>
-              <tr class="text-left text-xs text-[color:var(--muted)] uppercase tracking-wider border-b border-[color:var(--border)]">
-                <th class="py-2 pr-3">Telefone</th>
-                <th class="py-2 pr-3">Nome</th>
-                <th class="py-2 pr-3">Status</th>
-                <th class="py-2 pr-3">Anúncio</th>
-                <th class="py-2 pr-3">Primeira mensagem</th>
-                <th class="py-2 pr-3">Recebido</th>
-                <th class="py-2 pr-3">Ações</th>
-              </tr>
-            </thead>
-            <tbody id="conversas-body" class="mono"></tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-    <!-- Eventos tab -->
-    <section id="tab-eventos" class="fade-in hidden">
-      <div class="card p-4">
-        <div class="flex items-center gap-3 mb-3">
-          <input id="eventos-search" type="text" placeholder="Buscar por telefone" class="border border-[color:var(--border)] rounded-lg px-3 py-1.5 text-sm flex-1 max-w-xs">
-          <label class="flex items-center gap-2 text-sm text-[color:var(--dim)]">
-            <input type="checkbox" id="eventos-only-ctwa" class="rounded"> só CTWA
-          </label>
-          <button class="action-btn ml-auto" onclick="loadEvents()">Atualizar</button>
-        </div>
-        <div class="text-xs text-[color:var(--muted)] mb-2">Cada webhook do uazapi capturado, mensagem por mensagem.</div>
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm">
-            <thead>
-              <tr class="text-left text-xs text-[color:var(--muted)] uppercase tracking-wider border-b border-[color:var(--border)]">
-                <th class="py-2 pr-3">ID</th>
-                <th class="py-2 pr-3">Recebido</th>
-                <th class="py-2 pr-3">Nome</th>
-                <th class="py-2 pr-3">Telefone</th>
-                <th class="py-2 pr-3">Tipo</th>
-                <th class="py-2 pr-3">Evento</th>
-                <th class="py-2 pr-3">CAPI</th>
-              </tr>
-            </thead>
-            <tbody id="eventos-body" class="mono"></tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-    <!-- Palavras-chave tab -->
-    <section id="tab-keywords" class="fade-in hidden space-y-4">
-      <div class="text-xs text-[color:var(--muted)] max-w-2xl">
-        Quando você (o atendente) escreve uma dessas frases numa conversa, o
-        estágio muda sozinho e o evento correspondente é enviado à Meta —
-        igual clicar no botão manualmente. Maiúsculas/minúsculas e acentos
-        não importam. Só conta o que <strong>você</strong> escreve, nunca o
-        que o lead escreve.
-      </div>
-      <div class="grid md:grid-cols-3 gap-4" id="keywords-board"></div>
-    </section>
-
-    <!-- Configurações tab -->
-    <section id="tab-config" class="fade-in hidden space-y-4">
-      <div class="text-xs text-[color:var(--muted)] max-w-2xl">
-        IDs não-secretos do Meta e do Google Ads — Pixel ID, Page ID, conta
-        e Conversion Actions. Salvar aqui sobrepõe a variável de ambiente
-        do Cloudflare com o mesmo nome; "Restaurar padrão" volta a usar a
-        variável de ambiente. Tokens de acesso reais continuam só no
-        Cloudflare Pages, não aparecem aqui.
-      </div>
-      <div id="config-migration-warning" class="hidden card p-3 text-sm" style="border-color: var(--accent-red); color: var(--accent-red)">
-        A tabela <code class="mono">client_config</code> ainda não existe no banco — rode
-        <code class="mono">migrations/0005_client_config.sql</code> no D1 Console antes de salvar algo aqui.
-      </div>
-      <div class="card p-4">
-        <div class="font-semibold text-sm mb-3">Meta</div>
-        <div class="space-y-3" id="config-fields-meta"></div>
-      </div>
-      <div class="card p-4">
-        <div class="font-semibold text-sm mb-3">Google Ads</div>
-        <div class="space-y-3" id="config-fields-google"></div>
-      </div>
-    </section>
-
-    <!-- Clientes tab -->
-    <section id="tab-clientes" class="fade-in hidden space-y-4">
-      <div class="text-xs text-[color:var(--muted)] max-w-2xl">
-        Cada cliente tem sua própria URL de webhook e suas próprias
-        credenciais reais (token de acesso Meta, refresh token do Google
-        Ads) — essas ficam só no Cloudflare Pages, como variável de
-        ambiente com o prefixo do slug abaixo (ex.:
-        <code class="mono">TINTIM_META_ACCESS_TOKEN</code>). IDs
-        não-secretos (Pixel, Customer, Conversion Action) ficam na aba
-        "Configurações", um cliente de cada vez.
-      </div>
-      <div class="card p-4">
-        <div class="font-semibold text-sm mb-3">Novo cliente</div>
-        <div class="flex gap-2 flex-wrap items-end">
-          <div>
-            <label class="text-xs text-[color:var(--dim)] block mb-1">Nome</label>
-            <input type="text" id="new-client-name" placeholder="ex: Tintim" class="border border-[color:var(--border)] rounded-lg px-2.5 py-1.5 text-sm">
-          </div>
-          <div>
-            <label class="text-xs text-[color:var(--dim)] block mb-1">Slug</label>
-            <input type="text" id="new-client-slug" placeholder="ex: tintim" class="border border-[color:var(--border)] rounded-lg px-2.5 py-1.5 text-sm mono">
-          </div>
-          <button class="action-btn" onclick="createClient()">Criar</button>
-        </div>
-      </div>
-      <div class="card p-4">
-        <div class="font-semibold text-sm mb-3">Clientes cadastrados</div>
-        <div id="clients-list" class="space-y-3"></div>
-      </div>
-    </section>
-
-  </main>
+  </div>
 </div>
 
 <!-- Auth gate -->
-<div id="auth-gate" class="min-h-screen flex items-center justify-center">
-  <div class="card p-6 w-full max-w-sm">
-    <div class="font-semibold mb-1">Rastreio WPP</div>
-    <div class="text-sm text-[color:var(--dim)] mb-4">Cole o <code>DASH_KEY</code> configurado nas variáveis de ambiente do Cloudflare.</div>
-    <input id="auth-input" type="password" placeholder="DASH_KEY" class="w-full border border-[color:var(--border)] rounded-lg px-3 py-2 text-sm mb-3 font-mono">
-    <button id="auth-submit" class="w-full bg-[color:var(--accent-green)] text-white rounded-lg py-2 text-sm font-semibold">Entrar</button>
-    <div id="auth-error" class="text-xs text-red-600 mt-2 hidden">Chave inválida ou sem permissão.</div>
+<div id="auth-gate" class="min-h-screen flex items-center justify-center" style="background: radial-gradient(circle at 50% 0%, var(--accent-soft), var(--bg) 55%)">
+  <div class="card p-6 w-full max-w-sm" style="box-shadow: var(--shadow-md)">
+    <div class="flex items-center gap-2 mb-1">
+      <div class="brand-mark" style="width:1.75rem;height:1.75rem"><svg class="icon" style="width:0.9em;height:0.9em"><use href="#icon-key"/></svg></div>
+      <div class="font-semibold">Rastreio WPP</div>
+    </div>
+    <div class="text-sm mb-4" style="color:var(--text-dim)">Cole o <code class="mono">DASH_KEY</code> configurado nas variáveis de ambiente do Cloudflare.</div>
+    <input id="auth-input" type="password" placeholder="DASH_KEY" class="input w-full mb-3">
+    <button id="auth-submit" class="btn-primary w-full">Entrar</button>
+    <div id="auth-error" class="text-xs mt-2 hidden" style="color:var(--stage-lost-text)">Chave inválida ou sem permissão.</div>
   </div>
 </div>
 
 <!-- Details modal (raw payload inspector for an Eventos row) -->
-<div id="details-modal" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" onclick="if(event.target===this) closeDetails()">
-  <div class="card p-5 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+<div id="details-modal" class="hidden fixed inset-0 flex items-center justify-center p-4 z-50" style="background: rgba(10,12,16,0.5)" onclick="if(event.target===this) closeDetails()">
+  <div class="card p-5 w-full max-w-2xl max-h-[80vh] overflow-y-auto" style="box-shadow: var(--shadow-md)">
     <div class="flex items-center justify-between mb-3">
       <div class="font-semibold">Payload bruto</div>
       <button class="action-btn" onclick="closeDetails()">Fechar</button>
     </div>
-    <pre id="details-content" class="text-xs bg-[color:var(--bg)] p-3 rounded-lg overflow-x-auto"></pre>
+    <pre id="details-content" class="text-xs p-3 rounded-lg overflow-x-auto" style="background:var(--surface-hover)"></pre>
   </div>
 </div>
 
 <script>
+  applyTheme(localStorage.getItem('theme') || 'light');
+
   let key = new URLSearchParams(location.search).get('key') || sessionStorage.getItem('dashKey') || '';
   let currentClient = new URLSearchParams(location.search).get('client') || localStorage.getItem('currentClient') || '';
   let allClients = [];
   let autoRefreshTimer = null;
+  let lastTimeseries = [];
+
+  const AVATAR_PALETTE = ['#6366f1','#0ea5e9','#14b8a6','#d97706','#ef4444','#ec4899','#8b5cf6','#0f9d63'];
+  function avatarColor(slug) {
+    let hash = 0;
+    for (const ch of String(slug)) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+    return AVATAR_PALETTE[hash % AVATAR_PALETTE.length];
+  }
+  function initials(name) {
+    const parts = String(name || '?').trim().split(/\s+/);
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+
+  function applyTheme(t) {
+    document.documentElement.setAttribute('data-theme', t);
+    localStorage.setItem('theme', t);
+    const sun = document.getElementById('theme-icon-sun');
+    const moon = document.getElementById('theme-icon-moon');
+    if (sun && moon) {
+      sun.classList.toggle('hidden', t === 'dark');
+      moon.classList.toggle('hidden', t !== 'dark');
+    }
+    if (lastTimeseries.length && typeof Chart !== 'undefined') renderEvolutionChart(lastTimeseries);
+  }
+  function toggleTheme() {
+    const cur = document.documentElement.getAttribute('data-theme') || 'light';
+    applyTheme(cur === 'dark' ? 'light' : 'dark');
+  }
+
+  function toggleSidebar(force) {
+    const sb = document.getElementById('sidebar');
+    const ov = document.getElementById('sidebar-overlay');
+    const open = force !== undefined ? force : !sb.classList.contains('sidebar-open');
+    sb.classList.toggle('sidebar-open', open);
+    ov.classList.toggle('overlay-visible', open);
+  }
 
   // Returns the client list on success (auth valid), or null (401). This
   // endpoint doesn't require a `client` param, unlike the data endpoints,
@@ -307,15 +593,57 @@
 
   function setupClientSwitcher(clients) {
     allClients = clients;
-    const sel = document.getElementById('client-switcher');
     if (!clients.length) {
-      sel.innerHTML = '<option value="">Nenhum cliente</option>';
+      document.getElementById('workspace-name').textContent = 'Nenhum cliente';
+      document.getElementById('workspace-avatar').textContent = '?';
+      document.getElementById('workspace-avatar').style.background = 'var(--text-muted)';
       return;
     }
     if (!currentClient || !clients.some(c => c.slug === currentClient)) {
       currentClient = clients[0].slug;
     }
-    sel.innerHTML = clients.map(c => `<option value="${escapeHtml(c.slug)}" ${c.slug === currentClient ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('');
+    renderWorkspacePanel();
+    onClientChanged();
+  }
+
+  function renderWorkspaceButton() {
+    const client = allClients.find(c => c.slug === currentClient);
+    const avatarEl = document.getElementById('workspace-avatar');
+    const nameEl = document.getElementById('workspace-name');
+    if (!client) { avatarEl.textContent = '?'; avatarEl.style.background = 'var(--text-muted)'; nameEl.textContent = 'Nenhum cliente'; return; }
+    avatarEl.textContent = initials(client.name);
+    avatarEl.style.background = avatarColor(client.slug);
+    nameEl.textContent = client.name;
+  }
+
+  function renderWorkspacePanel() {
+    const panel = document.getElementById('workspace-panel');
+    const items = allClients.map(c => `
+      <button class="dropdown-item" onclick="pickClient('${c.slug}')">
+        <span class="avatar avatar-sm" style="background:${avatarColor(c.slug)}">${escapeHtml(initials(c.name))}</span>
+        <span class="flex-1 text-left truncate">${escapeHtml(c.name)}</span>
+        ${c.slug === currentClient ? '<svg class="icon" style="color:var(--accent)"><use href="#icon-check"/></svg>' : ''}
+      </button>
+    `).join('');
+    panel.innerHTML = items + `
+      <div class="dropdown-divider"></div>
+      <button class="dropdown-item" onclick="closeWorkspacePanel(); activateTab('clientes');">
+        <svg class="icon"><use href="#icon-plus"/></svg>
+        <span>Novo cliente</span>
+      </button>
+    `;
+  }
+
+  function toggleWorkspacePanel() { document.getElementById('workspace-panel').classList.toggle('hidden'); }
+  function closeWorkspacePanel() { document.getElementById('workspace-panel').classList.add('hidden'); }
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.workspace-wrap')) closeWorkspacePanel();
+  });
+
+  function pickClient(slug) {
+    currentClient = slug;
+    closeWorkspacePanel();
+    renderWorkspacePanel();
     onClientChanged();
   }
 
@@ -325,20 +653,15 @@
     url.searchParams.set('client', currentClient);
     history.replaceState(null, '', url);
 
+    renderWorkspaceButton();
+
     const client = allClients.find(c => c.slug === currentClient);
-    const label = client ? client.name : '';
-    document.getElementById('header-client-name').textContent = label ? `· ${label}` : '';
-    document.title = label ? `${label} — Rastreio WPP` : 'Rastreio WPP';
+    document.title = client ? `${client.name} — Rastreio WPP` : 'Rastreio WPP';
 
     loadStats();
     loadContacts();
     loadEvents();
   }
-
-  document.getElementById('client-switcher').addEventListener('change', (e) => {
-    currentClient = e.target.value;
-    onClientChanged();
-  });
 
   document.getElementById('auth-submit').addEventListener('click', async () => {
     const k = document.getElementById('auth-input').value.trim();
@@ -351,21 +674,24 @@
     }
   });
 
-  document.querySelectorAll('.dash-tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      document.querySelectorAll('.dash-tab').forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
-      const target = tab.dataset.tab;
-      document.getElementById('tab-visao-geral').classList.toggle('hidden', target !== 'visao-geral');
-      document.getElementById('tab-conversas').classList.toggle('hidden', target !== 'conversas');
-      document.getElementById('tab-eventos').classList.toggle('hidden', target !== 'eventos');
-      document.getElementById('tab-keywords').classList.toggle('hidden', target !== 'keywords');
-      document.getElementById('tab-config').classList.toggle('hidden', target !== 'config');
-      document.getElementById('tab-clientes').classList.toggle('hidden', target !== 'clientes');
-      if (target === 'keywords') loadKeywords();
-      if (target === 'config') loadConfig();
-      if (target === 'clientes') loadClientsAdmin();
-    });
+  const TAB_TITLES = { 'visao-geral': 'Visão Geral', 'conversas': 'Conversas', 'eventos': 'Eventos', 'keywords': 'Palavras-chave', 'config': 'Configurações', 'clientes': 'Clientes' };
+
+  function activateTab(target) {
+    document.querySelectorAll('.nav-item').forEach(t => t.classList.toggle('active', t.dataset.tab === target));
+    document.getElementById('tab-visao-geral').classList.toggle('hidden', target !== 'visao-geral');
+    document.getElementById('tab-conversas').classList.toggle('hidden', target !== 'conversas');
+    document.getElementById('tab-eventos').classList.toggle('hidden', target !== 'eventos');
+    document.getElementById('tab-keywords').classList.toggle('hidden', target !== 'keywords');
+    document.getElementById('tab-config').classList.toggle('hidden', target !== 'config');
+    document.getElementById('tab-clientes').classList.toggle('hidden', target !== 'clientes');
+    document.getElementById('page-title').textContent = TAB_TITLES[target] || '';
+    if (target === 'keywords') loadKeywords();
+    if (target === 'config') loadConfig();
+    if (target === 'clientes') loadClientsAdmin();
+    if (window.innerWidth < 1024) toggleSidebar(false);
+  }
+  document.querySelectorAll('.nav-item').forEach(item => {
+    item.addEventListener('click', () => activateTab(item.dataset.tab));
   });
 
   document.getElementById('auto-refresh').addEventListener('change', (e) => {
@@ -377,6 +703,7 @@
   });
 
   const STATUS_LABELS = { lead: 'Lead', qualified: 'Qualificado', scheduled: 'Agendado', sale: 'Venda', lost: 'Perdido' };
+  const STATUS_ICONS = { lead: 'users', qualified: 'check', scheduled: 'calendar', sale: 'dollar', lost: 'x' };
   let currentEventsRaw = [];
   let evolutionChart = null;
 
@@ -390,32 +717,38 @@
   function renderFunnel(ads, organic) {
     const top = (ads.total || 0) + (organic.total || 0);
     const lost = (ads.lost || 0) + (organic.lost || 0);
-    document.getElementById('funnel').innerHTML = FUNNEL_STAGES.map(stage => {
-      const a = ads[stage.key] || 0;
-      const o = organic[stage.key] || 0;
-      const total = a + o;
+    const totals = FUNNEL_STAGES.map(stage => (ads[stage.key] || 0) + (organic[stage.key] || 0));
+    const rows = FUNNEL_STAGES.map((stage, i) => {
+      const a = ads[stage.key] || 0, o = organic[stage.key] || 0, total = totals[i];
       const aPct = top ? (a / top) * 100 : 0;
       const oPct = top ? (o / top) * 100 : 0;
-      return `
+      const connector = i > 0 ? `<div class="funnel-connector">${totals[i - 1] ? Math.round((total / totals[i - 1]) * 100) : 0}% avançou de "${FUNNEL_STAGES[i - 1].label}"</div>` : '';
+      return `${connector}
         <div class="funnel-row">
-          <div class="text-xs text-[color:var(--dim)]">${stage.label}</div>
-          <div class="funnel-track flex">
-            <div class="h-full" style="width:${aPct}%;background:var(--accent-blue)"></div>
-            <div class="h-full" style="width:${oPct}%;background:var(--muted)"></div>
+          <div class="funnel-label">${stage.label}</div>
+          <div class="funnel-track">
+            <div class="funnel-fill" style="width:${aPct}%;background:var(--chart-leads)"></div>
+            <div class="funnel-fill" style="width:${oPct}%;background:var(--text-muted)"></div>
           </div>
-          <div class="text-sm font-semibold mono text-right" title="${a} anúncios · ${o} orgânico">${total}</div>
+          <div class="funnel-total mono" title="${a} anúncios · ${o} orgânico">${total}</div>
         </div>
       `;
-    }).join('') + (lost ? `<div class="text-xs text-[color:var(--muted)] mt-1">${lost} perdido(s)</div>` : '');
+    }).join('');
+    document.getElementById('funnel').innerHTML = rows + (lost ? `<div class="text-xs mt-2" style="color:var(--text-muted)">${lost} perdido(s)</div>` : '');
   }
 
+  function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
   function renderEvolutionChart(timeseries) {
+    lastTimeseries = timeseries;
     const labels = timeseries.map(t => t.day.slice(5)); // MM-DD
+    const gridColor = cssVar('--border');
+    const tickColor = cssVar('--text-muted');
     const datasets = [
-      { label: 'Leads', data: timeseries.map(t => t.leads), borderColor: '#2563eb', backgroundColor: '#2563eb22', tension: 0.3 },
-      { label: 'Qualificados', data: timeseries.map(t => t.qualified), borderColor: '#7c3aed', backgroundColor: '#7c3aed22', tension: 0.3 },
-      { label: 'Agendados', data: timeseries.map(t => t.scheduled), borderColor: '#d97706', backgroundColor: '#d9770622', tension: 0.3 },
-      { label: 'Vendas', data: timeseries.map(t => t.sale), borderColor: '#16a34a', backgroundColor: '#16a34a22', tension: 0.3 },
+      { label: 'Leads', data: timeseries.map(t => t.leads), borderColor: cssVar('--chart-leads'), backgroundColor: cssVar('--chart-leads') + '22', tension: 0.35, fill: true },
+      { label: 'Qualificados', data: timeseries.map(t => t.qualified), borderColor: cssVar('--chart-qualified'), backgroundColor: cssVar('--chart-qualified') + '22', tension: 0.35, fill: true },
+      { label: 'Agendados', data: timeseries.map(t => t.scheduled), borderColor: cssVar('--chart-scheduled'), backgroundColor: cssVar('--chart-scheduled') + '22', tension: 0.35, fill: true },
+      { label: 'Vendas', data: timeseries.map(t => t.sale), borderColor: cssVar('--chart-sale'), backgroundColor: cssVar('--chart-sale') + '22', tension: 0.35, fill: true },
     ];
     if (evolutionChart) evolutionChart.destroy();
     evolutionChart = new Chart(document.getElementById('evolution-chart'), {
@@ -423,8 +756,11 @@
       data: { labels, datasets },
       options: {
         responsive: true, maintainAspectRatio: false,
-        scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
-        plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } } },
+        scales: {
+          y: { beginAtZero: true, ticks: { precision: 0, color: tickColor }, grid: { color: gridColor } },
+          x: { ticks: { color: tickColor }, grid: { display: false } },
+        },
+        plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 }, color: tickColor } } },
       },
     });
   }
@@ -434,7 +770,7 @@
     body.innerHTML = (rows || []).map(r => {
       const conv = r.leads ? Math.round((r.qualified / r.leads) * 100) : 0;
       return `
-        <tr class="row-hover border-b border-[color:var(--border)]">
+        <tr class="row-hover border-b">
           <td class="py-2 pr-3">
             <div class="flex items-center gap-2 max-w-xs">
               ${r.ad_thumbnail_url ? `<img class="ad-thumb" src="${escapeHtml(r.ad_thumbnail_url)}" alt="" onerror="this.style.display='none'">` : ''}
@@ -447,7 +783,7 @@
           <td class="py-2 pr-3">${conv}%</td>
         </tr>
       `;
-    }).join('') || `<tr><td colspan="5" class="py-6 text-center text-[color:var(--muted)]">Nenhum lead de anúncio ainda.</td></tr>`;
+    }).join('') || `<tr><td colspan="5" class="py-6 text-center" style="color:var(--text-muted)">Nenhum lead de anúncio ainda.</td></tr>`;
   }
 
   let statsRangeDays = 30;
@@ -470,11 +806,22 @@
     });
   });
 
+  function renderSkeletonRows(tbodyId, cols, rows = 5) {
+    const body = document.getElementById(tbodyId);
+    if (!body) return;
+    body.innerHTML = Array.from({ length: rows }).map(() => `
+      <tr class="border-b">
+        ${Array.from({ length: cols }).map(() => `<td class="py-2 pr-3"><div class="skeleton-bar"></div></td>`).join('')}
+      </tr>
+    `).join('');
+  }
+
   async function loadContacts() {
     const search = document.getElementById('conversas-search').value.trim();
     const onlyCtwa = document.getElementById('conversas-only-ctwa').checked ? '1' : '0';
     const params = new URLSearchParams({ key, client: currentClient, only_ctwa: onlyCtwa });
     if (search) params.set('search', search);
+    renderSkeletonRows('conversas-body', 7);
     const res = await fetch(`/api/whatsapp-contacts?${params}`);
     const data = await res.json();
 
@@ -482,32 +829,37 @@
     (data.counts_by_status || []).forEach(c => counts[c.status] = c.count);
     const countsEl = document.getElementById('status-counts');
     countsEl.innerHTML = Object.keys(STATUS_LABELS).map(s => `
-      <div class="card p-3">
-        <div class="text-xs text-[color:var(--muted)] uppercase tracking-wider">${STATUS_LABELS[s]}</div>
-        <div class="text-xl font-semibold mono mt-1">${counts[s] || 0}</div>
+      <div class="card kpi-card">
+        <div class="kpi-icon kpi-icon-${s}"><svg class="icon"><use href="#icon-${STATUS_ICONS[s]}"/></svg></div>
+        <div>
+          <div class="kpi-label">${STATUS_LABELS[s]}</div>
+          <div class="kpi-value mono">${counts[s] || 0}</div>
+        </div>
       </div>
     `).join('');
 
     const body = document.getElementById('conversas-body');
     body.innerHTML = (data.contacts || []).map(c => `
-      <tr class="row-hover border-b border-[color:var(--border)]">
+      <tr class="row-hover border-b">
         <td class="py-2 pr-3">${c.phone}</td>
         <td class="py-2 pr-3">${escapeHtml(c.push_name || '—')}</td>
         <td class="py-2 pr-3">
           <span class="badge badge-${c.status}">${STATUS_LABELS[c.status] || c.status}</span>
-          ${c.status_source === 'keyword' ? '<span class="text-[10px] text-[color:var(--muted)] ml-1" title="Mudou sozinho por palavra-chave">🔤 frase</span>' : ''}
+          ${c.status_source === 'keyword' ? `<span class="text-[10px] ml-1" style="color:var(--text-muted)" title="Mudou sozinho por palavra-chave">🔤 frase</span>` : ''}
         </td>
         <td class="py-2 pr-3">${c.is_ctwa ? `<div class="flex items-center gap-2">${c.ad_thumbnail_url ? `<img class="ad-thumb-sm" src="${escapeHtml(c.ad_thumbnail_url)}" alt="" onerror="this.style.display='none'">` : ''}<span title="${escapeHtml(c.ad_headline || '')}">${escapeHtml(c.ad_headline || 'CTWA')}</span></div>` : (c.ad_platform === 'google' ? `<span class="badge badge-scheduled" title="${escapeHtml(c.gclid || '')}">Google Ads</span>` : '—')}</td>
         <td class="py-2 pr-3 max-w-xs truncate" title="${escapeHtml(c.first_message_text || '')}">${escapeHtml(c.first_message_text || '—')}</td>
         <td class="py-2 pr-3">${fmtTime(c.first_message_at)}</td>
-        <td class="py-2 pr-3 space-x-1 whitespace-nowrap">
-          <button class="action-btn" onclick="markStatus('${c.wa_id}','qualified')">Qualificado</button>
-          <button class="action-btn" onclick="markStatus('${c.wa_id}','scheduled')">Agendado</button>
-          <button class="action-btn" onclick="markSale('${c.wa_id}')">Venda</button>
-          <button class="action-btn" onclick="markStatus('${c.wa_id}','lost')">Perdido</button>
+        <td class="py-2 pr-3 whitespace-nowrap">
+          <div class="row-actions">
+            <button class="action-btn" onclick="markStatus('${c.wa_id}','qualified')">Qualificado</button>
+            <button class="action-btn" onclick="markStatus('${c.wa_id}','scheduled')">Agendado</button>
+            <button class="action-btn" onclick="markSale('${c.wa_id}')">Venda</button>
+            <button class="action-btn" onclick="markStatus('${c.wa_id}','lost')">Perdido</button>
+          </div>
         </td>
       </tr>
-    `).join('') || `<tr><td colspan="7" class="py-6 text-center text-[color:var(--muted)]">Nenhuma conversa ainda.</td></tr>`;
+    `).join('') || `<tr><td colspan="7"><div class="empty-state"><svg class="icon"><use href="#icon-inbox"/></svg>Nenhuma conversa ainda.</div></td></tr>`;
   }
 
   async function loadEvents() {
@@ -515,6 +867,7 @@
     const onlyCtwa = document.getElementById('eventos-only-ctwa').checked ? '1' : '0';
     const params = new URLSearchParams({ key, client: currentClient, only_ctwa: onlyCtwa });
     if (search) params.set('search', search);
+    renderSkeletonRows('eventos-body', 7);
     const res = await fetch(`/api/whatsapp-events?${params}`);
     const data = await res.json();
 
@@ -523,7 +876,7 @@
 
     const body = document.getElementById('eventos-body');
     body.innerHTML = events.map((e, i) => `
-      <tr class="row-hover border-b border-[color:var(--border)] cursor-pointer" data-idx="${i}">
+      <tr class="row-hover border-b cursor-pointer" data-idx="${i}">
         <td class="py-2 pr-3">#${e.id}</td>
         <td class="py-2 pr-3">${fmtTime(e.created_at)}</td>
         <td class="py-2 pr-3">${escapeHtml(e.push_name || '—')}</td>
@@ -532,7 +885,7 @@
         <td class="py-2 pr-3">${e.event_name}</td>
         <td class="py-2 pr-3">${e.sent_to_meta ? (e.meta_response_ok ? '✅' : '❌ ' + e.meta_status_code) : '—'}</td>
       </tr>
-    `).join('') || `<tr><td colspan="7" class="py-6 text-center text-[color:var(--muted)]">Nenhum evento ainda. Configure o webhook no painel do uazapi.</td></tr>`;
+    `).join('') || `<tr><td colspan="7"><div class="empty-state"><svg class="icon"><use href="#icon-inbox"/></svg>Nenhum evento ainda. Configure o webhook no painel do uazapi.</div></td></tr>`;
 
     body.querySelectorAll('tr[data-idx]').forEach(row => {
       row.addEventListener('click', () => openDetails(currentEventsRaw[Number(row.dataset.idx)]));
@@ -584,15 +937,15 @@
           <div class="font-semibold text-sm mb-3">${stage.label}</div>
           <div class="space-y-1.5 mb-3" id="keywords-list-${stage.key}">
             ${items.map(k => `
-              <div class="flex items-center justify-between gap-2 text-sm bg-[color:var(--bg)] rounded-lg px-2.5 py-1.5">
+              <div class="flex items-center justify-between gap-2 text-sm rounded-lg px-2.5 py-1.5" style="background:var(--surface-hover)">
                 <span class="truncate">${escapeHtml(k.phrase)}</span>
-                <button class="action-btn" onclick="deleteKeyword(${k.id})">Remover</button>
+                <button class="action-btn" onclick="deleteKeyword(${k.id})"><svg class="icon"><use href="#icon-trash"/></svg></button>
               </div>
-            `).join('') || `<div class="text-xs text-[color:var(--muted)]">Nenhuma frase cadastrada.</div>`}
+            `).join('') || `<div class="text-xs" style="color:var(--text-muted)">Nenhuma frase cadastrada.</div>`}
           </div>
           <div class="flex gap-2">
-            <input type="text" id="keyword-input-${stage.key}" placeholder="ex: agendado com sucesso" class="border border-[color:var(--border)] rounded-lg px-2.5 py-1.5 text-sm flex-1">
-            <button class="action-btn" onclick="addKeyword('${stage.key}')">Adicionar</button>
+            <input type="text" id="keyword-input-${stage.key}" placeholder="ex: agendado com sucesso" class="input flex-1">
+            <button class="action-btn" onclick="addKeyword('${stage.key}')"><svg class="icon"><use href="#icon-plus"/></svg></button>
           </div>
         </div>
       `;
@@ -655,18 +1008,18 @@
       container.innerHTML = CONFIG_FIELDS.filter(f => f.group === group).map(f => {
         const current = byKey[f.key] || { value: '', source: null };
         const sourceLabel = current.source === 'dashboard'
-          ? '<span class="text-[10px] text-[color:var(--accent-green)]">configurado aqui</span>'
+          ? `<span class="text-[10px]" style="color:var(--accent)">configurado aqui</span>`
           : current.source === 'env'
-            ? '<span class="text-[10px] text-[color:var(--muted)]">via variável de ambiente</span>'
-            : '<span class="text-[10px] text-[color:var(--muted)]">não configurado</span>';
+            ? `<span class="text-[10px]" style="color:var(--text-muted)">via variável de ambiente</span>`
+            : `<span class="text-[10px]" style="color:var(--text-muted)">não configurado</span>`;
         return `
           <div>
-            <label class="text-xs text-[color:var(--dim)] flex items-center justify-between">
+            <label class="text-xs flex items-center justify-between" style="color:var(--text-dim)">
               <span>${f.label}</span>
               ${sourceLabel}
             </label>
             <div class="flex gap-2 mt-1">
-              <input type="text" id="config-input-${f.key}" value="${escapeHtml(current.value || '')}" class="border border-[color:var(--border)] rounded-lg px-2.5 py-1.5 text-sm flex-1 mono">
+              <input type="text" id="config-input-${f.key}" value="${escapeHtml(current.value || '')}" class="input flex-1 mono">
               <button class="action-btn" onclick="saveConfigField('${f.key}')">Salvar</button>
               ${current.source === 'dashboard' ? `<button class="action-btn" onclick="resetConfigField('${f.key}')">Restaurar padrão</button>` : ''}
             </div>
@@ -719,13 +1072,16 @@
       const prefix = c.slug.toUpperCase().replace(/-/g, '_');
       const secretNames = ['META_ACCESS_TOKEN', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_REFRESH_TOKEN', 'GOOGLE_ADS_DEVELOPER_TOKEN'];
       return `
-        <div class="border border-[color:var(--border)] rounded-lg p-3 text-sm space-y-1">
-          <div class="font-medium">${escapeHtml(c.name)} <span class="text-xs text-[color:var(--muted)] mono">(${escapeHtml(c.slug)})</span></div>
-          <div class="text-xs text-[color:var(--dim)]">Webhook uazapi: <span class="mono">${escapeHtml(webhookUrl)}</span></div>
-          <div class="text-xs text-[color:var(--dim)]">Secrets no Cloudflare Pages (só as que esse cliente usar): ${secretNames.map(n => `<span class="mono">${prefix}_${n}</span>`).join(', ')}</div>
+        <div class="rounded-lg p-3 text-sm space-y-1.5 border">
+          <div class="flex items-center gap-2 font-medium">
+            <span class="avatar avatar-sm" style="background:${avatarColor(c.slug)}">${escapeHtml(initials(c.name))}</span>
+            ${escapeHtml(c.name)} <span class="text-xs mono" style="color:var(--text-muted)">(${escapeHtml(c.slug)})</span>
+          </div>
+          <div class="text-xs" style="color:var(--text-dim)">Webhook uazapi: <span class="mono">${escapeHtml(webhookUrl)}</span></div>
+          <div class="text-xs" style="color:var(--text-dim)">Secrets no Cloudflare Pages (só as que esse cliente usar): ${secretNames.map(n => `<span class="mono">${prefix}_${n}</span>`).join(', ')}</div>
         </div>
       `;
-    }).join('') || `<div class="text-xs text-[color:var(--muted)]">Nenhum cliente cadastrado ainda.</div>`;
+    }).join('') || `<div class="text-xs" style="color:var(--text-muted)">Nenhum cliente cadastrado ainda.</div>`;
   }
 
   async function createClient() {
@@ -747,7 +1103,9 @@
     const listRes = await fetch(`/api/clients?key=${encodeURIComponent(key)}`);
     if (listRes.ok) {
       const data = await listRes.json();
-      setupClientSwitcher(data.clients || []);
+      allClients = data.clients || [];
+      renderWorkspacePanel();
+      renderWorkspaceButton();
     }
   }
 
