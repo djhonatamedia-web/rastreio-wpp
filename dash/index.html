@@ -525,8 +525,6 @@
 </div>
 
 <script>
-  applyTheme(localStorage.getItem('theme') || 'light');
-
   let key = new URLSearchParams(location.search).get('key') || sessionStorage.getItem('dashKey') || '';
   let currentClient = new URLSearchParams(location.search).get('client') || localStorage.getItem('currentClient') || '';
   let allClients = [];
@@ -1128,6 +1126,7 @@
     return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
   }
 
+  applyTheme(localStorage.getItem('theme') || 'light');
   boot();
 </script>
 
