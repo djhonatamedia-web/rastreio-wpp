@@ -59,7 +59,8 @@ Cada linha de cada tabela pertence a um `client_id` — ver
 | `functions/_shared/client-config.js` | IDs não-secretos por cliente, fallback D1 → env var |
 | `functions/_shared/clients.js` | `resolveClientBySlug`/`resolveClientByWebhookSlug`/`getClientSecret` |
 | `functions/_shared/hashing.js` | `sha256`/`normalizePhone`/`normalizeName` |
-| `functions/api/whatsapp-contacts.js` | GET — aba "Conversas" |
+| `functions/api/whatsapp-contacts.js` | GET — aba "Conversas" (lista) |
+| `functions/api/whatsapp-contact.js` | GET — painel de um contato: timeline, origem e tempo de resposta |
 | `functions/api/whatsapp-events.js` | GET — aba "Eventos" (log cru) |
 | `functions/api/whatsapp-status.js` | POST — marcar estágio manualmente |
 | `functions/api/whatsapp-stats.js` | GET — aba "Visão Geral" |
