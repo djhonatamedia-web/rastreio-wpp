@@ -66,6 +66,7 @@ Cada linha de cada tabela pertence a um `client_id` — ver
 | `functions/api/whatsapp-keywords.js` | GET/POST/DELETE — aba "Palavras-chave" |
 | `functions/api/config.js` | GET/POST/DELETE — aba "Configurações" |
 | `functions/api/clients.js` | GET/POST — aba "Clientes" (lista/cria cliente) |
+| `functions/api/client-status.js` | GET — checklist de onboarding por cliente (só booleanos, nunca valor de credencial) |
 | `functions/api/track-click.js` | POST público — captura `gclid`/`gbraid`/`wbraid` de landing page |
 | `config/whatsapp.js` | Mapas estágio→evento, status válidos, palavras-chave, Google Ads |
 | `migrations/0001-0006` | Schema D1, em ordem (ver nomes dos arquivos) |

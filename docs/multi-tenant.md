@@ -48,6 +48,25 @@ cliente dentro da mesma implantação" — ver migration `0006_multi_tenant.sql`
    preencher Pixel ID / Page ID / Customer ID / Conversion Actions.
 5. Selecionar o cliente no seletor do topo do dashboard pra ver os dados
    dele.
+6. Conferir o card **"Status da configuração"** no topo da aba
+   "Configurações" (`GET /api/client-status`): ele diz, pra o cliente
+   selecionado, se o webhook já recebeu alguma coisa, se o token do Meta
+   é o próprio ou o herdado do fallback, se Pixel/Page estão preenchidos
+   e qual foi o último envio pra Meta. É a forma de saber que o passo 3
+   realmente foi feito — env var não pode ser lida de volta no Cloudflare.
+
+## Cuidado com o fallback
+
+Os dois fallbacks (`getClientSecret` pro nome sem prefixo,
+`getConfigValues` pro `env[key]`) existem pra o cliente 1 continuar
+funcionando sem renomear nada. O efeito colateral é que um cliente novo
+mal configurado **não falha** — ele passa a usar a credencial/ID do
+cliente 1 em silêncio. Por isso:
+
+- A aba "Configurações" mostra valor herdado só como *placeholder*, nunca
+  como valor do campo — salvar sem digitar não copia o ID do cliente 1.
+- O card de status marca `herdado` em amarelo, com o nome exato da env
+  var que está faltando.
 
 ## Isolamento
 

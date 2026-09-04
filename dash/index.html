@@ -212,6 +212,19 @@
   .callout-warning { background: var(--stage-lost-bg); color: var(--stage-lost-text); }
   .callout-warning .icon { color: var(--stage-lost-text); }
 
+  .check-row { display: flex; align-items: flex-start; gap: 0.625rem; padding: 0.5rem 0; border-bottom: 1px solid var(--border); font-size: 0.8125rem; }
+  .check-row:last-child { border-bottom: none; }
+  .check-row .icon { flex-shrink: 0; margin-top: 0.1875rem; }
+  .check-ok .icon { color: var(--accent); }
+  .check-warn .icon { color: var(--stage-scheduled-text); }
+  .check-bad .icon { color: var(--stage-lost-text); }
+  .check-label { font-weight: 600; }
+  .check-detail { color: var(--text-muted); font-size: 0.75rem; margin-top: 0.0625rem; }
+
+  .client-pill { display: inline-flex; align-items: center; gap: 0.4375rem; padding: 0.1875rem 0.625rem 0.1875rem 0.1875rem; border-radius: 999px; background: var(--surface-hover); border: 1px solid var(--border); font-size: 0.75rem; font-weight: 600; color: var(--text-dim); }
+  .switch-flash { animation: switchFlash 0.5s ease; }
+  @keyframes switchFlash { 0% { background: var(--accent-soft); } 100% { background: var(--surface-hover); } }
+
   .table-scroll { max-height: 65vh; overflow-y: auto; }
   table thead th { position: sticky; top: 0; background: var(--surface); z-index: 1; }
 
@@ -305,6 +318,10 @@
         <div class="topbar-inner">
           <button class="icon-btn sidebar-toggle" onclick="toggleSidebar()"><svg class="icon"><use href="#icon-menu"/></svg></button>
           <div id="page-title">Visão Geral</div>
+          <div id="topbar-client" class="client-pill">
+            <span class="avatar avatar-sm" id="topbar-client-avatar">?</span>
+            <span id="topbar-client-name">—</span>
+          </div>
         </div>
       </div>
 
@@ -445,6 +462,13 @@
               Cloudflare Pages, não aparecem aqui.
             </div>
           </div>
+          <div class="card p-4">
+            <div class="flex items-center justify-between mb-3">
+              <div class="font-semibold text-sm">Status da configuração</div>
+              <button class="action-btn" onclick="loadClientStatus()"><svg class="icon"><use href="#icon-refresh"/></svg></button>
+            </div>
+            <div id="client-status-body"></div>
+          </div>
           <div id="config-migration-warning" class="hidden callout callout-warning">
             <svg class="icon"><use href="#icon-x"/></svg>
             <div>A tabela <code class="mono">client_config</code> ainda não existe no banco — rode
@@ -530,6 +554,12 @@
   let allClients = [];
   let autoRefreshTimer = null;
   let lastTimeseries = [];
+  let currentTab = 'visao-geral';
+  // Bumped on every client switch. Each loader captures it before its
+  // fetch and throws the response away if it changed meanwhile - without
+  // this, switching clients quickly can paint the previous client's data
+  // over the new one.
+  let clientEpoch = 0;
 
   const AVATAR_PALETTE = ['#6366f1','#0ea5e9','#14b8a6','#d97706','#ef4444','#ec4899','#8b5cf6','#0f9d63'];
   function avatarColor(slug) {
@@ -639,6 +669,7 @@
   });
 
   function pickClient(slug) {
+    if (slug === currentClient) { closeWorkspacePanel(); return; }
     currentClient = slug;
     closeWorkspacePanel();
     renderWorkspacePanel();
@@ -646,6 +677,7 @@
   }
 
   function onClientChanged() {
+    clientEpoch++;
     localStorage.setItem('currentClient', currentClient);
     const url = new URL(location.href);
     url.searchParams.set('client', currentClient);
@@ -656,9 +688,57 @@
     const client = allClients.find(c => c.slug === currentClient);
     document.title = client ? `${client.name} — Rastreio WPP` : 'Rastreio WPP';
 
+    // Every screen goes to a loading state right away, so the switch is
+    // visible even before the responses land.
+    clearClientViews();
+
     loadStats();
     loadContacts();
     loadEvents();
+    // ...and whatever tab is actually on screen, which is what used to be
+    // missing: staying on "Configuracoes" or "Palavras-chave" while
+    // switching clients left the previous client's data up.
+    if (currentTab === 'keywords') loadKeywords();
+    if (currentTab === 'config') { loadConfig(); loadClientStatus(); }
+  }
+
+  function clearClientViews() {
+    const client = allClients.find(c => c.slug === currentClient);
+    const pill = document.getElementById('topbar-client');
+    if (client) {
+      document.getElementById('topbar-client-avatar').textContent = initials(client.name);
+      document.getElementById('topbar-client-avatar').style.background = avatarColor(client.slug);
+      document.getElementById('topbar-client-name').textContent = client.name;
+      pill.classList.remove('switch-flash');
+      void pill.offsetWidth; // restart the animation on a repeated switch
+      pill.classList.add('switch-flash');
+    }
+    renderSkeletonRows('conversas-body', 7);
+    renderSkeletonRows('eventos-body', 7);
+    renderSkeletonRows('by-ad-body', 5);
+    document.getElementById('funnel').innerHTML = '';
+    document.getElementById('status-counts').innerHTML = '';
+    if (currentTab === 'keywords') document.getElementById('keywords-board').innerHTML = '';
+    if (currentTab === 'config') {
+      document.getElementById('config-fields-meta').innerHTML = '';
+      document.getElementById('config-fields-google').innerHTML = '';
+      document.getElementById('client-status-body').innerHTML = loadingLine('Carregando status…');
+    }
+  }
+
+  function loadingLine(text) {
+    return `<div class="text-xs" style="color:var(--text-muted)">${escapeHtml(text)}</div>`;
+  }
+  function errorLine(text) {
+    return `<div class="callout callout-warning"><svg class="icon"><use href="#icon-x"/></svg><div>${escapeHtml(text)}</div></div>`;
+  }
+  async function readError(res) {
+    try {
+      const body = await res.json();
+      return body.error || `HTTP ${res.status}`;
+    } catch (e) {
+      return `HTTP ${res.status}`;
+    }
   }
 
   document.getElementById('auth-submit').addEventListener('click', async () => {
@@ -675,6 +755,7 @@
   const TAB_TITLES = { 'visao-geral': 'Visão Geral', 'conversas': 'Conversas', 'eventos': 'Eventos', 'keywords': 'Palavras-chave', 'config': 'Configurações', 'clientes': 'Clientes' };
 
   function activateTab(target) {
+    currentTab = target;
     document.querySelectorAll('.nav-item').forEach(t => t.classList.toggle('active', t.dataset.tab === target));
     document.getElementById('tab-visao-geral').classList.toggle('hidden', target !== 'visao-geral');
     document.getElementById('tab-conversas').classList.toggle('hidden', target !== 'conversas');
@@ -684,7 +765,7 @@
     document.getElementById('tab-clientes').classList.toggle('hidden', target !== 'clientes');
     document.getElementById('page-title').textContent = TAB_TITLES[target] || '';
     if (target === 'keywords') loadKeywords();
-    if (target === 'config') loadConfig();
+    if (target === 'config') { loadConfig(); loadClientStatus(); }
     if (target === 'clientes') loadClientsAdmin();
     if (window.innerWidth < 1024) toggleSidebar(false);
   }
@@ -787,9 +868,16 @@
   let statsRangeDays = 30;
 
   async function loadStats() {
+    const epoch = clientEpoch;
     const res = await fetch(`/api/whatsapp-stats?key=${encodeURIComponent(key)}&client=${encodeURIComponent(currentClient)}&days=${statsRangeDays}`);
-    if (!res.ok) return;
+    if (epoch !== clientEpoch) return;
+    if (!res.ok) {
+      document.getElementById('funnel').innerHTML = errorLine('Não foi possível carregar a Visão Geral: ' + await readError(res));
+      document.getElementById('by-ad-body').innerHTML = '';
+      return;
+    }
     const data = await res.json();
+    if (epoch !== clientEpoch) return;
     renderFunnel(data.funnel.ads, data.funnel.organic);
     renderEvolutionChart(data.timeseries || []);
     renderByAd(data.by_ad || []);
@@ -820,8 +908,16 @@
     const params = new URLSearchParams({ key, client: currentClient, only_ctwa: onlyCtwa });
     if (search) params.set('search', search);
     renderSkeletonRows('conversas-body', 7);
+    const epoch = clientEpoch;
     const res = await fetch(`/api/whatsapp-contacts?${params}`);
+    if (epoch !== clientEpoch) return;
+    if (!res.ok) {
+      document.getElementById('status-counts').innerHTML = '';
+      document.getElementById('conversas-body').innerHTML = `<tr><td colspan="7">${errorLine('Não foi possível carregar as conversas: ' + await readError(res))}</td></tr>`;
+      return;
+    }
     const data = await res.json();
+    if (epoch !== clientEpoch) return;
 
     const counts = {};
     (data.counts_by_status || []).forEach(c => counts[c.status] = c.count);
@@ -866,8 +962,15 @@
     const params = new URLSearchParams({ key, client: currentClient, only_ctwa: onlyCtwa });
     if (search) params.set('search', search);
     renderSkeletonRows('eventos-body', 7);
+    const epoch = clientEpoch;
     const res = await fetch(`/api/whatsapp-events?${params}`);
+    if (epoch !== clientEpoch) return;
+    if (!res.ok) {
+      document.getElementById('eventos-body').innerHTML = `<tr><td colspan="7">${errorLine('Não foi possível carregar os eventos: ' + await readError(res))}</td></tr>`;
+      return;
+    }
     const data = await res.json();
+    if (epoch !== clientEpoch) return;
 
     const events = data.events || [];
     currentEventsRaw = events.map(e => e.raw_payload || null);
@@ -919,9 +1022,15 @@
   let currentKeywords = [];
 
   async function loadKeywords() {
+    const epoch = clientEpoch;
     const res = await fetch(`/api/whatsapp-keywords?key=${encodeURIComponent(key)}&client=${encodeURIComponent(currentClient)}`);
-    if (!res.ok) return;
+    if (epoch !== clientEpoch) return;
+    if (!res.ok) {
+      document.getElementById('keywords-board').innerHTML = errorLine('Não foi possível carregar as palavras-chave: ' + await readError(res));
+      return;
+    }
     const data = await res.json();
+    if (epoch !== clientEpoch) return;
     currentKeywords = data.keywords || [];
     renderKeywords();
   }
@@ -991,9 +1100,16 @@
   ];
 
   async function loadConfig() {
+    const epoch = clientEpoch;
     const res = await fetch(`/api/config?key=${encodeURIComponent(key)}&client=${encodeURIComponent(currentClient)}`);
-    if (!res.ok) return;
+    if (epoch !== clientEpoch) return;
+    if (!res.ok) {
+      document.getElementById('config-fields-meta').innerHTML = errorLine('Não foi possível carregar as configurações: ' + await readError(res));
+      document.getElementById('config-fields-google').innerHTML = '';
+      return;
+    }
     const data = await res.json();
+    if (epoch !== clientEpoch) return;
     document.getElementById('config-migration-warning').classList.toggle('hidden', !data.migration_pending);
     const byKey = {};
     (data.config || []).forEach(c => byKey[c.key] = c);
@@ -1005,11 +1121,21 @@
       const container = document.getElementById(`config-fields-${group}`);
       container.innerHTML = CONFIG_FIELDS.filter(f => f.group === group).map(f => {
         const current = byKey[f.key] || { value: '', source: null };
+        // A value coming from `env` belongs to the global fallback, not to
+        // this client. Rendering it as the input's value made "herdado" look
+        // identical to "configurado" - and hitting Salvar copied the
+        // fallback client's id onto this one (which is how Margel ended up
+        // with the test client's Page ID). It goes in the placeholder now:
+        // visible for reference, impossible to save by accident.
+        const inherited = current.source === 'env';
         const sourceLabel = current.source === 'dashboard'
-          ? `<span class="text-[10px]" style="color:var(--accent)">configurado aqui</span>`
-          : current.source === 'env'
-            ? `<span class="text-[10px]" style="color:var(--text-muted)">via variável de ambiente</span>`
+          ? `<span class="text-[10px]" style="color:var(--accent)">configurado para este cliente</span>`
+          : inherited
+            ? `<span class="text-[10px] font-semibold" style="color:var(--stage-scheduled-text)">⚠ herdado do fallback global</span>`
             : `<span class="text-[10px]" style="color:var(--text-muted)">não configurado</span>`;
+        const inputAttrs = inherited
+          ? `value="" placeholder="${escapeHtml(current.value || '')} (herdado — digite o valor deste cliente)"`
+          : `value="${escapeHtml(current.value || '')}"`;
         return `
           <div>
             <label class="text-xs flex items-center justify-between" style="color:var(--text-dim)">
@@ -1017,7 +1143,7 @@
               ${sourceLabel}
             </label>
             <div class="flex gap-2 mt-1">
-              <input type="text" id="config-input-${f.key}" value="${escapeHtml(current.value || '')}" class="input flex-1 mono">
+              <input type="text" id="config-input-${f.key}" ${inputAttrs} class="input flex-1 mono">
               <button class="action-btn" onclick="saveConfigField('${f.key}')">Salvar</button>
               ${current.source === 'dashboard' ? `<button class="action-btn" onclick="resetConfigField('${f.key}')">Restaurar padrão</button>` : ''}
             </div>
@@ -1041,6 +1167,7 @@
       return;
     }
     loadConfig();
+    loadClientStatus();
   }
 
   async function resetConfigField(configKey) {
@@ -1054,11 +1181,87 @@
       return;
     }
     loadConfig();
+    loadClientStatus();
+  }
+
+  async function loadClientStatus() {
+    const box = document.getElementById('client-status-body');
+    const epoch = clientEpoch;
+    box.innerHTML = loadingLine('Carregando status…');
+    const res = await fetch(`/api/client-status?key=${encodeURIComponent(key)}&client=${encodeURIComponent(currentClient)}`);
+    if (epoch !== clientEpoch) return;
+    if (!res.ok) {
+      box.innerHTML = errorLine('Não foi possível carregar o status: ' + await readError(res));
+      return;
+    }
+    const data = await res.json();
+    if (epoch !== clientEpoch) return;
+    renderClientStatus(data);
+  }
+
+  // level: 'ok' | 'warn' | 'bad' - the icon and color follow from it, so
+  // the checklist reads at a glance without having to parse the detail line.
+  function checkRow(level, label, detail) {
+    const icon = level === 'ok' ? 'check' : level === 'warn' ? 'info' : 'x';
+    return `
+      <div class="check-row check-${level}">
+        <svg class="icon"><use href="#icon-${icon}"/></svg>
+        <div>
+          <div class="check-label">${escapeHtml(label)}</div>
+          <div class="check-detail">${detail}</div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderClientStatus(s) {
+    const rows = [];
+
+    if (s.webhook.events_received > 0) {
+      rows.push(checkRow('ok', 'Webhook recebendo mensagens',
+        `${s.webhook.events_received} evento(s) — último em ${fmtTime(s.webhook.last_event_at)}`));
+    } else {
+      rows.push(checkRow('bad', 'Webhook nunca recebeu nada',
+        `Cole esta URL na uazapi deste número e habilite o evento de mensagem recebida:<br><span class="mono">${escapeHtml(s.webhook.url)}</span>`));
+    }
+
+    const tok = s.meta.access_token;
+    if (tok.source === 'prefixed') {
+      rows.push(checkRow('ok', 'Token de acesso do Meta', `Próprio deste cliente (<span class="mono">${escapeHtml(tok.env_var)}</span>)`));
+    } else if (tok.source === 'fallback') {
+      rows.push(checkRow('warn', 'Token de acesso do Meta herdado',
+        `<span class="mono">${escapeHtml(tok.env_var)}</span> não existe no Cloudflare — os eventos deste cliente estão saindo com o token global (de outro cliente). Crie a variável e faça um novo deploy.`));
+    } else {
+      rows.push(checkRow('bad', 'Sem token de acesso do Meta',
+        `Nenhum envio pro Meta vai funcionar. Crie <span class="mono">${escapeHtml(tok.env_var)}</span> no Cloudflare Pages e faça um novo deploy.`));
+    }
+
+    for (const [label, field] of [['Pixel ID', s.meta.pixel_id], ['Page ID', s.meta.page_id]]) {
+      if (field.source === 'dashboard') rows.push(checkRow('ok', `Meta ${label}`, 'Configurado para este cliente'));
+      else if (field.source === 'env') rows.push(checkRow('warn', `Meta ${label} herdado`, 'Está usando o valor global (de outro cliente). Preencha o valor deste cliente abaixo.'));
+      else rows.push(checkRow('bad', `Meta ${label} não configurado`, 'Preencha abaixo — sem ele o envio pro Meta é descartado.'));
+    }
+
+    rows.push(checkRow(s.contacts.ctwa > 0 ? 'ok' : 'warn', 'Leads vindos de anúncio',
+      `${s.contacts.ctwa} de ${s.contacts.total} contato(s) com <span class="mono">ctwa_clid</span>. Sem isso o Meta não consegue atribuir o evento ao anúncio.`));
+
+    if (s.last_capi_send) {
+      rows.push(checkRow(s.last_capi_send.ok ? 'ok' : 'bad', 'Último envio pro Meta',
+        `${escapeHtml(s.last_capi_send.event_name)} — HTTP ${s.last_capi_send.status_code} em ${fmtTime(s.last_capi_send.at)}`));
+    } else {
+      rows.push(checkRow('warn', 'Nenhum evento enviado pro Meta ainda',
+        'Marque um contato vindo de anúncio como Qualificado para testar ponta a ponta.'));
+    }
+
+    document.getElementById('client-status-body').innerHTML = rows.join('');
   }
 
   async function loadClientsAdmin() {
     const res = await fetch(`/api/clients?key=${encodeURIComponent(key)}`);
-    if (!res.ok) return;
+    if (!res.ok) {
+      document.getElementById('clients-list').innerHTML = errorLine('Não foi possível carregar os clientes: ' + await readError(res));
+      return;
+    }
     const data = await res.json();
     renderClientsAdmin(data.clients || []);
   }

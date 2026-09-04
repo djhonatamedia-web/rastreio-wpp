@@ -36,3 +36,17 @@ function prefixedSecretName(client, name) {
 export function getClientSecret(env, client, name) {
   return env[prefixedSecretName(client, name)] || env[name] || null;
 }
+
+// Same lookup as getClientSecret(), but returns only whether the secret
+// exists and which of the two names it came from - never the value. The
+// fallback above is silent by design (it keeps client 1 working), which
+// means "forgot to create <SLUG>_META_ACCESS_TOKEN" looks identical to
+// "configured correctly" from the outside: the client's events go out
+// with another client's token. This is what /api/client-status uses to
+// surface that in the dashboard.
+export function describeClientSecret(env, client, name) {
+  const prefixed = prefixedSecretName(client, name);
+  if (env[prefixed]) return { set: true, source: 'prefixed', env_var: prefixed };
+  if (env[name]) return { set: true, source: 'fallback', env_var: prefixed };
+  return { set: false, source: null, env_var: prefixed };
+}
