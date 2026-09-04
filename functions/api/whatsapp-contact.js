@@ -98,10 +98,12 @@ export async function onRequestGet(context) {
         kind: 'stage',
         at,
         event_name: row.event_name,
-        // whatsapp_events.source is transport, and that's exactly what
-        // separates the two ways a stage can change: 'dashboard' = someone
-        // clicked a button, 'webhook' = a trigger phrase matched.
-        trigger: row.source === 'webhook' ? 'keyword' : 'manual',
+        // whatsapp_events.source is transport, and that's what separates a
+        // button click ('dashboard') from a trigger phrase ('webhook') -
+        // except for LeadSubmitted, which sendFirstTouchLead() also writes
+        // with source 'webhook' but is neither: it fires automatically on
+        // the first ad-attributed message.
+        trigger: row.event_name === 'LeadSubmitted' ? 'auto' : (row.source === 'webhook' ? 'keyword' : 'manual'),
         value: row.value,
         currency: row.currency,
         sent_to_meta: row.sent_to_meta === 1,

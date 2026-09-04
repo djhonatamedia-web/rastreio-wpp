@@ -1556,7 +1556,7 @@
     }
 
     const label = STAGE_EVENT_LABELS[item.event_name] || item.event_name;
-    const how = item.trigger === 'keyword' ? ' (por palavra-chave)' : '';
+    const how = item.trigger === 'keyword' ? ' (por palavra-chave)' : item.trigger === 'auto' ? ' (automático)' : '';
     const meta = item.sent_to_meta
       ? (item.meta_response_ok ? `✅ Meta ${item.meta_status_code}` : `❌ Meta ${item.meta_status_code}`)
       : '';
