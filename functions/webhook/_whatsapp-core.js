@@ -96,7 +96,7 @@ export async function processWhatsAppMessage({ raw, env, context, client }) {
   }
 
   const existing = await env.DB
-    .prepare('SELECT id, ctwa_clid, gclid, gbraid, wbraid FROM whatsapp_contacts WHERE client_id = ? AND wa_id = ?')
+    .prepare('SELECT id, ctwa_clid, gclid, gbraid, wbraid, ad_platform FROM whatsapp_contacts WHERE client_id = ? AND wa_id = ?')
     .bind(client.id, extracted.waId)
     .first();
 
@@ -136,21 +136,23 @@ export async function processWhatsAppMessage({ raw, env, context, client }) {
       return { ok: true, contact: 'existing', waId: extracted.waId, capi: `backfilled ctwa_clid, ${capi}` };
     }
 
-    // Same ordering-quirk handling, for Google Ads attribution: the "Ref:
-    // <code>" text can land on a later message than the one that created
-    // the contact. No CAPI send here (see file header) - just backfill.
-    if (!existing.gclid && !existing.gbraid && !existing.wbraid && extracted.googleAdsCode) {
-      await backfillGoogleAdsAttribution({ env, client, waId: extracted.waId, code: extracted.googleAdsCode, now });
-      return { ok: true, contact: 'existing', waId: extracted.waId, capi: 'backfilled google ads click id' };
+    // Same ordering-quirk handling, for Google Ads / fixed-channel
+    // attribution: the "Ref: <code>" text can land on a later message than
+    // the one that created the contact. No CAPI send here (see file
+    // header) - just backfill.
+    if (!existing.gclid && !existing.gbraid && !existing.wbraid && !existing.ad_platform && extracted.googleAdsCode) {
+      await backfillClickAttribution({ env, client, waId: extracted.waId, code: extracted.googleAdsCode, now });
+      return { ok: true, contact: 'existing', waId: extracted.waId, capi: 'backfilled click/channel attribution' };
     }
 
     return { ok: true, contact: 'existing', waId: extracted.waId };
   }
 
-  // Resolve a Google Ads click id before insert, if this first message
-  // carries a "Ref: <code>" from the landing-page bridge (see file header).
-  const googleClick = extracted.googleAdsCode
-    ? await lookupGoogleAdsClick({ env, client, code: extracted.googleAdsCode })
+  // Resolve a Google Ads click id or fixed-channel code before insert, if
+  // this first message carries a "Ref: <code>" from the landing-page
+  // bridge or a bio/GMB link (see file header).
+  const click = extracted.googleAdsCode
+    ? await lookupClickCode({ env, client, code: extracted.googleAdsCode })
     : null;
 
   // First-ever message from this wa_id: create the contact, first-touch
@@ -177,10 +179,10 @@ export async function processWhatsAppMessage({ raw, env, context, client }) {
       extracted.adMediaType || null,
       extracted.adThumbnailUrl || null,
       extracted.ctwaClid ? 1 : 0,
-      googleClick?.gclid || null,
-      googleClick?.gbraid || null,
-      googleClick?.wbraid || null,
-      extracted.ctwaClid ? 'meta' : (googleClick ? 'google' : null),
+      click?.gclid || null,
+      click?.gbraid || null,
+      click?.wbraid || null,
+      extracted.ctwaClid ? 'meta' : platformFor(click),
       extracted.text || null,
       extracted.timestamp || now,
       now,
@@ -188,44 +190,54 @@ export async function processWhatsAppMessage({ raw, env, context, client }) {
     )
     .run();
 
-  if (googleClick) {
-    context.waitUntil(markGoogleAdsCodeMatched({ env, client, code: extracted.googleAdsCode, waId: extracted.waId, now }));
+  if (click) {
+    context.waitUntil(markClickCodeMatched({ env, client, code: extracted.googleAdsCode, waId: extracted.waId, now }));
   }
 
   const capi = await sendFirstTouchLead({ extracted, eventId, now, env, context, client });
   return { ok: true, contact: 'created', waId: extracted.waId, capi };
 }
 
-// Looks up a Google Ads click id captured earlier by /api/track-click.
-// Returns null if the code is unknown (e.g. the lead edited the pre-filled
-// message and the code never made it in - see docs/google-ads-whatsapp.md).
-async function lookupGoogleAdsClick({ env, client, code }) {
+// Looks up a code captured earlier by /api/track-click (a Google Ads click,
+// with gclid/gbraid/wbraid) or registered as a fixed channel link by
+// /api/channel-codes (bio/gmb, `channel` set instead). Returns null if the
+// code is unknown (e.g. the lead edited the pre-filled message and the
+// code never made it in - see docs/google-ads-whatsapp.md).
+async function lookupClickCode({ env, client, code }) {
   const row = await env.DB
-    .prepare('SELECT gclid, gbraid, wbraid FROM ad_click_codes WHERE client_id = ? AND code = ?')
+    .prepare('SELECT gclid, gbraid, wbraid, channel FROM ad_click_codes WHERE client_id = ? AND code = ?')
     .bind(client.id, code)
     .first();
   return row || null;
 }
 
-async function markGoogleAdsCodeMatched({ env, client, code, waId, now }) {
+// A click id means Google Ads; otherwise it's whatever fixed channel the
+// code was registered under (bio/gmb) - see migrations/0007_channel_codes.sql.
+function platformFor(click) {
+  if (!click) return null;
+  if (click.gclid || click.gbraid || click.wbraid) return 'google';
+  return click.channel || null;
+}
+
+async function markClickCodeMatched({ env, client, code, waId, now }) {
   await env.DB
     .prepare('UPDATE ad_click_codes SET matched_wa_id = ?, matched_at = ? WHERE client_id = ? AND code = ?')
     .bind(waId, now, client.id, code)
     .run();
 }
 
-// Existing-contact path: backfill Google Ads attribution once, same
+// Existing-contact path: backfill click/channel attribution once, same
 // pattern as the ctwa_clid backfill above.
-async function backfillGoogleAdsAttribution({ env, client, waId, code, now }) {
-  const googleClick = await lookupGoogleAdsClick({ env, client, code });
-  if (!googleClick) return;
+async function backfillClickAttribution({ env, client, waId, code, now }) {
+  const click = await lookupClickCode({ env, client, code });
+  if (!click) return;
 
   await env.DB
     .prepare('UPDATE whatsapp_contacts SET gclid = ?, gbraid = ?, wbraid = ?, ad_platform = ?, updated_at = ? WHERE client_id = ? AND wa_id = ?')
-    .bind(googleClick.gclid || null, googleClick.gbraid || null, googleClick.wbraid || null, 'google', now, client.id, waId)
+    .bind(click.gclid || null, click.gbraid || null, click.wbraid || null, platformFor(click), now, client.id, waId)
     .run();
 
-  await markGoogleAdsCodeMatched({ env, client, code, waId, now });
+  await markClickCodeMatched({ env, client, code, waId, now });
 }
 
 // Fires the automatic first-touch 'LeadSubmitted' CAPI event and logs the

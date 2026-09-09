@@ -69,8 +69,9 @@ Cada linha de cada tabela pertence a um `client_id` — ver
 | `functions/api/clients.js` | GET/POST — aba "Clientes" (lista/cria cliente) |
 | `functions/api/client-status.js` | GET — checklist de onboarding por cliente (só booleanos, nunca valor de credencial) |
 | `functions/api/track-click.js` | POST público — captura `gclid`/`gbraid`/`wbraid` de landing page |
+| `functions/api/channel-codes.js` | GET/POST/DELETE — aba "Configurações", canais fixos (bio/GMB) |
 | `config/whatsapp.js` | Mapas estágio→evento, status válidos, palavras-chave, Google Ads |
-| `migrations/0001-0006` | Schema D1, em ordem (ver nomes dos arquivos) |
+| `migrations/0001-0007` | Schema D1, em ordem (ver nomes dos arquivos) |
 | `dash/index.html` | Dashboard single-file (Tailwind CDN, sem build) |
 
 ## Deep reference

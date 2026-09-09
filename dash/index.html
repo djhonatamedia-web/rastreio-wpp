@@ -511,6 +511,18 @@
             <div class="font-semibold text-sm mb-3">Google Ads</div>
             <div class="space-y-3" id="config-fields-google"></div>
           </div>
+          <div class="card p-4">
+            <div class="font-semibold text-sm mb-1">Canais fixos</div>
+            <div class="text-xs mb-3" style="color:var(--text-dim)">
+              Link na bio e Google Meu Negócio não têm um clique rastreável
+              como um anúncio — um único link fixo por canal, colado uma vez.
+              Não envia conversão pra nenhuma plataforma, só identifica a
+              origem aqui no dashboard.
+            </div>
+            <label class="text-xs" style="color:var(--text-dim)">Número de WhatsApp deste cliente (só pra montar o link abaixo, não é salvo)</label>
+            <input type="text" id="channel-wa-number" class="input mono mt-1 mb-3" placeholder="5511999998888" oninput="onChannelNumberInput()">
+            <div class="space-y-3" id="config-fields-channels"></div>
+          </div>
         </section>
 
         <!-- Clientes tab -->
@@ -613,6 +625,7 @@
   let clientEpoch = 0;
   let currentContacts = [];
   let openContactWaId = null;
+  let currentChannelCodes = {};
 
   const AVATAR_PALETTE = ['#6366f1','#0ea5e9','#14b8a6','#d97706','#ef4444','#ec4899','#8b5cf6','#0f9d63'];
   function avatarColor(slug) {
@@ -758,7 +771,7 @@
     // missing: staying on "Configuracoes" or "Palavras-chave" while
     // switching clients left the previous client's data up.
     if (currentTab === 'keywords') loadKeywords();
-    if (currentTab === 'config') { loadConfig(); loadClientStatus(); }
+    if (currentTab === 'config') { loadConfig(); loadClientStatus(); loadChannelCodes(); }
   }
 
   function clearClientViews() {
@@ -784,6 +797,7 @@
     if (currentTab === 'config') {
       document.getElementById('config-fields-meta').innerHTML = '';
       document.getElementById('config-fields-google').innerHTML = '';
+      document.getElementById('config-fields-channels').innerHTML = '';
       document.getElementById('client-status-body').innerHTML = loadingLine('Carregando status…');
     }
   }
@@ -827,7 +841,7 @@
     document.getElementById('tab-clientes').classList.toggle('hidden', target !== 'clientes');
     document.getElementById('page-title').textContent = TAB_TITLES[target] || '';
     if (target === 'keywords') loadKeywords();
-    if (target === 'config') { loadConfig(); loadClientStatus(); }
+    if (target === 'config') { loadConfig(); loadClientStatus(); loadChannelCodes(); }
     if (target === 'clientes') loadClientsAdmin();
     if (window.innerWidth < 1024) toggleSidebar(false);
   }
@@ -844,6 +858,7 @@
   });
 
   const STATUS_LABELS = { lead: 'Lead', qualified: 'Qualificado', scheduled: 'Agendado', sale: 'Venda', lost: 'Perdido' };
+  const AD_PLATFORM_LABELS = { google: 'Google Ads', bio: 'Link na Bio', gmb: 'Google Meu Negócio' };
   const STATUS_ICONS = { lead: 'users', qualified: 'check', scheduled: 'calendar', sale: 'dollar', lost: 'x' };
   let currentEventsRaw = [];
   let evolutionChart = null;
@@ -1007,7 +1022,7 @@
           <span class="badge badge-${c.status}">${STATUS_LABELS[c.status] || c.status}</span>
           ${c.status_source === 'keyword' ? `<span class="text-[10px] ml-1" style="color:var(--text-muted)" title="Mudou sozinho por palavra-chave">🔤 frase</span>` : ''}
         </td>
-        <td class="py-2 pr-3">${c.is_ctwa ? `<div class="flex items-center gap-2">${c.ad_thumbnail_url ? `<img class="ad-thumb-sm" src="${escapeHtml(c.ad_thumbnail_url)}" alt="" onerror="this.style.display='none'">` : ''}<span title="${escapeHtml(c.ad_headline || '')}">${escapeHtml(c.ad_headline || 'CTWA')}</span></div>` : (c.ad_platform === 'google' ? `<span class="badge badge-scheduled" title="${escapeHtml(c.gclid || '')}">Google Ads</span>` : '—')}</td>
+        <td class="py-2 pr-3">${c.is_ctwa ? `<div class="flex items-center gap-2">${c.ad_thumbnail_url ? `<img class="ad-thumb-sm" src="${escapeHtml(c.ad_thumbnail_url)}" alt="" onerror="this.style.display='none'">` : ''}<span title="${escapeHtml(c.ad_headline || '')}">${escapeHtml(c.ad_headline || 'CTWA')}</span></div>` : (c.ad_platform ? `<span class="badge badge-scheduled" title="${escapeHtml(c.gclid || '')}">${AD_PLATFORM_LABELS[c.ad_platform] || c.ad_platform}</span>` : '—')}</td>
         <td class="py-2 pr-3 max-w-xs truncate" title="${escapeHtml(c.first_message_text || '')}">${escapeHtml(c.first_message_text || '—')}</td>
         <td class="py-2 pr-3">${fmtTime(c.first_message_at)}</td>
         <td class="py-2 pr-3 whitespace-nowrap">
@@ -1255,6 +1270,98 @@
     }
     loadConfig();
     loadClientStatus();
+  }
+
+  const CHANNEL_LABELS = { bio: 'Link na Bio', gmb: 'Google Meu Negócio' };
+
+  function onChannelNumberInput() {
+    const input = document.getElementById('channel-wa-number');
+    localStorage.setItem('channelWaNumber:' + currentClient, input.value.trim());
+    renderChannelLinks();
+  }
+
+  async function loadChannelCodes() {
+    const epoch = clientEpoch;
+    document.getElementById('channel-wa-number').value = localStorage.getItem('channelWaNumber:' + currentClient) || '';
+    const res = await fetch(`/api/channel-codes?key=${encodeURIComponent(key)}&client=${encodeURIComponent(currentClient)}`);
+    if (epoch !== clientEpoch) return;
+    if (!res.ok) {
+      document.getElementById('config-fields-channels').innerHTML = errorLine('Não foi possível carregar os canais: ' + await readError(res));
+      return;
+    }
+    const data = await res.json();
+    if (epoch !== clientEpoch) return;
+    currentChannelCodes = {};
+    (data.codes || []).forEach(c => currentChannelCodes[c.channel] = c);
+    renderChannelLinks();
+  }
+
+  function renderChannelLinks() {
+    const container = document.getElementById('config-fields-channels');
+    const number = document.getElementById('channel-wa-number').value.trim().replace(/\D/g, '');
+    container.innerHTML = Object.keys(CHANNEL_LABELS).map(channel => {
+      const row = currentChannelCodes[channel];
+      if (!row) {
+        return `
+          <div class="flex items-center justify-between">
+            <span class="text-sm">${CHANNEL_LABELS[channel]}</span>
+            <button class="action-btn" onclick="createChannelCode('${channel}')">Gerar código</button>
+          </div>
+        `;
+      }
+      const refText = `Ref: ${row.code}`;
+      const link = number ? `https://wa.me/${number}?text=${encodeURIComponent(refText)}` : null;
+      const matched = row.matched_wa_id ? `<span class="text-[10px]" style="color:var(--text-muted)">já recebeu conversa</span>` : `<span class="text-[10px]" style="color:var(--text-muted)">ainda sem conversa</span>`;
+      return `
+        <div>
+          <div class="flex items-center justify-between">
+            <span class="text-sm">${CHANNEL_LABELS[channel]} <span class="mono text-xs" style="color:var(--text-muted)">${row.code}</span></span>
+            ${matched}
+          </div>
+          <div class="flex gap-2 mt-1">
+            <input type="text" readonly class="input flex-1 mono text-xs" value="${escapeHtml(link || refText)}">
+            <button class="action-btn" onclick="copyChannelLink(this, ${JSON.stringify(link || refText)})">Copiar</button>
+            <button class="action-btn" onclick="deleteChannelCode('${channel}', '${row.code}')">Remover</button>
+          </div>
+          ${!link ? `<div class="text-[10px] mt-1" style="color:var(--text-dim)">Preencha o número acima pra gerar o link pronto — por enquanto, cole esse texto como mensagem pré-preenchida do seu próprio link wa.me.</div>` : ''}
+        </div>
+      `;
+    }).join('');
+  }
+
+  async function createChannelCode(channel) {
+    const res = await fetch('/api/channel-codes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-dash-key': key },
+      body: JSON.stringify({ client: currentClient, channel }),
+    });
+    if (!res.ok) {
+      alert('Erro ao gerar código: ' + (await res.text()));
+      return;
+    }
+    loadChannelCodes();
+  }
+
+  async function deleteChannelCode(channel, code) {
+    if (!confirm(`Remover o código de ${CHANNEL_LABELS[channel]}? O link já colado na bio/GMB para de funcionar.`)) return;
+    const res = await fetch('/api/channel-codes', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json', 'x-dash-key': key },
+      body: JSON.stringify({ client: currentClient, code }),
+    });
+    if (!res.ok) {
+      alert('Erro ao remover: ' + (await res.text()));
+      return;
+    }
+    loadChannelCodes();
+  }
+
+  function copyChannelLink(btn, text) {
+    navigator.clipboard.writeText(text).then(() => {
+      const original = btn.textContent;
+      btn.textContent = 'Copiado!';
+      setTimeout(() => { btn.textContent = original; }, 1500);
+    }).catch(() => alert('Não foi possível copiar automaticamente. Copie manualmente: ' + text));
   }
 
   async function loadClientStatus() {
@@ -1525,6 +1632,8 @@
       }
     } else if (contact.ad_platform === 'google') {
       rows.push(`<div class="text-sm">Google Ads <span class="text-xs mono" style="color:var(--text-muted)">${escapeHtml(contact.gclid || contact.gbraid || contact.wbraid || '')}</span></div>`);
+    } else if (contact.ad_platform) {
+      rows.push(`<div class="text-sm">${escapeHtml(AD_PLATFORM_LABELS[contact.ad_platform] || contact.ad_platform)} <span class="text-xs" style="color:var(--text-muted)">— canal fixo, sem envio de conversão</span></div>`);
     } else {
       rows.push(`<div class="text-sm" style="color:var(--text-dim)">Orgânico — não veio de anúncio.</div>`);
     }
