@@ -1069,7 +1069,7 @@
         <td class="py-2 pr-3">${e.wa_id ? e.wa_id.replace(/@.*/, '') : '—'}</td>
         <td class="py-2 pr-3"><span class="badge badge-lead">${e.message_type || '—'}</span></td>
         <td class="py-2 pr-3">${e.event_name}</td>
-        <td class="py-2 pr-3">${e.sent_to_meta ? (e.meta_response_ok ? '✅' : '❌ ' + e.meta_status_code) : '—'}</td>
+        <td class="py-2 pr-3">${e.sent_to_meta ? (e.meta_response_ok ? '✅' : `<span title="${escapeHtml(extractApiErrorClient(e.meta_response_body) || '')}">❌ ${e.meta_status_code}</span>`) : '—'}</td>
       </tr>
     `).join('') || `<tr><td colspan="7"><div class="empty-state"><svg class="icon"><use href="#icon-inbox"/></svg>Nenhum evento ainda. Configure o webhook no painel do uazapi.</div></td></tr>`;
 
@@ -1669,7 +1669,14 @@
     const meta = item.sent_to_meta
       ? (item.meta_response_ok ? `✅ Meta ${item.meta_status_code}` : `❌ Meta ${item.meta_status_code}`)
       : '';
-    return `<div class="timeline-marker"><span>${escapeHtml(label + how)} · ${fmtTime(item.at)}${meta ? ' · ' + meta : ''}</span></div>`;
+    const errorLines = [
+      !item.meta_response_ok && item.meta_error ? `Meta: ${item.meta_error}` : null,
+      item.google_ads_status_code && !item.google_ads_response_ok && item.google_ads_error ? `Google Ads: ${item.google_ads_error}` : null,
+    ].filter(Boolean);
+    const errorBlock = errorLines.length
+      ? `<div class="text-xs mt-0.5" style="color:var(--stage-lost-text)">${errorLines.map(escapeHtml).join('<br>')}</div>`
+      : '';
+    return `<div class="timeline-marker"><span>${escapeHtml(label + how)} · ${fmtTime(item.at)}${meta ? ' · ' + meta : ''}</span>${errorBlock}</div>`;
   }
 
   function openDetails(rawPayloadJson) {
@@ -1681,6 +1688,20 @@
   }
   function closeDetails() {
     document.getElementById('details-modal').classList.add('hidden');
+  }
+
+  // Mirrors extractApiError() in functions/api/whatsapp-contact.js - the
+  // Eventos tab gets the raw meta_response_body straight from the API
+  // (no server-side parsing there), so the same extraction happens here
+  // just for the tooltip.
+  function extractApiErrorClient(responseBody) {
+    if (!responseBody) return null;
+    try {
+      const parsed = JSON.parse(responseBody);
+      return parsed?.error?.error_user_msg || parsed?.error?.message || null;
+    } catch (e) {
+      return null;
+    }
   }
 
   function fmtTime(unixSeconds) {

@@ -67,8 +67,8 @@ export async function onRequestGet(context) {
       SELECT
         id, event_name, event_time, created_at, source, message_type,
         raw_payload, value, currency,
-        sent_to_meta, meta_status_code, meta_response_ok,
-        google_ads_status_code, google_ads_response_ok
+        sent_to_meta, meta_status_code, meta_response_ok, meta_response_body,
+        google_ads_status_code, google_ads_response_ok, google_ads_response_body
       FROM whatsapp_events
       WHERE client_id = ? AND wa_id = ?
       ORDER BY COALESCE(event_time, created_at) ASC, id ASC
@@ -109,8 +109,15 @@ export async function onRequestGet(context) {
         sent_to_meta: row.sent_to_meta === 1,
         meta_status_code: row.meta_status_code,
         meta_response_ok: row.meta_response_ok === 1,
+        // Only surfaced on failure - a 400 badge alone doesn't say WHY Meta
+        // rejected it, and that reason is usually a Business Manager
+        // config issue (Pixel not linked to the Page, event type not
+        // enabled for messaging events), not something visible anywhere
+        // else in the dashboard. See docs/capi-whatsapp.md.
+        meta_error: row.meta_response_ok !== 1 ? extractApiError(row.meta_response_body) : null,
         google_ads_status_code: row.google_ads_status_code,
         google_ads_response_ok: row.google_ads_response_ok === 1,
+        google_ads_error: row.google_ads_response_ok !== 1 ? extractApiError(row.google_ads_response_body) : null,
       });
     }
 
@@ -142,6 +149,25 @@ function parseMessage(rawPayload) {
     messageType: msg.messageType || null,
     hasAdContext: !!msg.content?.contextInfo?.externalAdReply,
   };
+}
+
+// Meta's error_user_msg is already a human-readable (pt-BR) explanation of
+// why a business_messaging event was rejected - almost always a Business
+// Manager config problem (Pixel not linked to the Page, event type not
+// enabled for messaging events), not a payload bug. Google Ads' CAPI uses
+// a differently-shaped error, hence the two fallback paths below.
+function extractApiError(responseBody) {
+  if (!responseBody) return null;
+  let parsed;
+  try {
+    parsed = JSON.parse(responseBody);
+  } catch (e) {
+    return null;
+  }
+  if (parsed?.error?.error_user_msg) return parsed.error.error_user_msg;
+  if (parsed?.error?.message) return parsed.error.message;
+  if (parsed?.partialFailureError?.errors?.[0]?.message) return parsed.partialFailureError.errors[0].message;
+  return null;
 }
 
 // The numbers the dashboard leads with. "Quanto o time do cliente demorou
