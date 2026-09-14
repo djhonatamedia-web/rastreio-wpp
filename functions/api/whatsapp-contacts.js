@@ -1,8 +1,15 @@
 // GET /api/whatsapp-contacts?key=...&client=<slug>&status=lead&only_ctwa=1&search=5511&limit=100
+// GET /api/whatsapp-contacts?key=...&client=<slug>&from=<unix>&to=<unix>
 //
 // Dashboard "Conversas" tab - one row per WhatsApp contact with its current
 // lifecycle status, scoped to one client (see functions/_shared/clients.js).
 // Source: whatsapp_contacts (the only mutable table in this project).
+//
+// `from`/`to` (unix seconds, both optional, independent of each other)
+// filter by `created_at` - "quando o contato chegou", not any later
+// stage change. Unlike whatsapp-stats.js there's no `days` shortcut or
+// implicit window here: with neither param the list behaves exactly as
+// before (most recent `limit` contacts, no date cutoff).
 
 import { resolveClientBySlug } from '../_shared/clients.js';
 
@@ -23,6 +30,8 @@ export async function onRequestGet(context) {
   const status = url.searchParams.get('status') || null;
   const onlyCtwa = url.searchParams.get('only_ctwa') === '1';
   const search = url.searchParams.get('search') || null;
+  const from = url.searchParams.get('from') ? parseInt(url.searchParams.get('from'), 10) : null;
+  const to = url.searchParams.get('to') ? parseInt(url.searchParams.get('to'), 10) : null;
   const limit = clampInt(url.searchParams.get('limit'), 100, 1, 500);
 
   const clauses = ['client_id = ?'];
@@ -37,6 +46,14 @@ export async function onRequestGet(context) {
   if (search) {
     clauses.push('phone LIKE ?');
     binds.push(`%${search.replace(/\D/g, '')}%`);
+  }
+  if (from != null && !Number.isNaN(from)) {
+    clauses.push('created_at >= ?');
+    binds.push(from);
+  }
+  if (to != null && !Number.isNaN(to)) {
+    clauses.push('created_at <= ?');
+    binds.push(to);
   }
   const where = `WHERE ${clauses.join(' AND ')}`;
 

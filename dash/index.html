@@ -416,11 +416,16 @@
           <div class="kpi-grid" id="status-counts"></div>
 
           <div class="card p-4">
-            <div class="flex items-center gap-3 mb-3">
+            <div class="flex items-center gap-3 mb-3 flex-wrap">
               <input id="conversas-search" type="text" placeholder="Buscar por telefone" class="input flex-1 max-w-xs">
               <label class="flex items-center gap-2 text-sm" style="color:var(--text-dim)">
                 <input type="checkbox" id="conversas-only-ctwa"> só CTWA
               </label>
+              <span class="text-xs" style="color:var(--text-muted)">chegou de</span>
+              <input type="date" id="conversas-from" class="input" style="width:9.5rem" onchange="loadContacts()">
+              <span class="text-xs" style="color:var(--text-muted)">até</span>
+              <input type="date" id="conversas-to" class="input" style="width:9.5rem" onchange="loadContacts()">
+              <button class="action-btn" title="Limpar datas" onclick="clearConversasDateFilter()">Limpar</button>
               <button class="action-btn ml-auto" onclick="loadContacts()"><svg class="icon"><use href="#icon-refresh"/></svg></button>
             </div>
             <div class="table-scroll overflow-x-auto">
@@ -1025,11 +1030,22 @@
     `).join('');
   }
 
+  function clearConversasDateFilter() {
+    document.getElementById('conversas-from').value = '';
+    document.getElementById('conversas-to').value = '';
+    loadContacts();
+  }
+
   async function loadContacts() {
     const search = document.getElementById('conversas-search').value.trim();
     const onlyCtwa = document.getElementById('conversas-only-ctwa').checked ? '1' : '0';
     const params = new URLSearchParams({ key, client: currentClient, only_ctwa: onlyCtwa });
     if (search) params.set('search', search);
+    const fromValue = document.getElementById('conversas-from').value;
+    const toValue = document.getElementById('conversas-to').value;
+    // Fim do dia selecionado em "até", pra incluir o dia inteiro na janela.
+    if (fromValue) params.set('from', Math.floor(new Date(fromValue + 'T00:00:00').getTime() / 1000));
+    if (toValue) params.set('to', Math.floor(new Date(toValue + 'T23:59:59').getTime() / 1000));
     renderSkeletonRows('conversas-body', 7);
     const epoch = clientEpoch;
     const res = await fetch(`/api/whatsapp-contacts?${params}`);
