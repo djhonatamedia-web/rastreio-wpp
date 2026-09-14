@@ -360,12 +360,20 @@
         <section id="tab-visao-geral" class="fade-in space-y-6">
           <div class="flex items-center gap-2">
             <span class="text-xs uppercase tracking-wider" style="color:var(--text-muted)">Período</span>
-            <div id="range-selector" class="flex gap-1">
+            <div id="range-selector" class="flex gap-1 flex-wrap items-center">
               <button class="action-btn" data-days="7">7d</button>
               <button class="action-btn" data-days="14">14d</button>
               <button class="action-btn active-range" data-days="30">30d</button>
               <button class="action-btn" data-days="60">60d</button>
+              <button class="action-btn" id="range-custom-toggle">Personalizado</button>
             </div>
+          </div>
+          <div id="range-custom-form" class="hidden flex flex-wrap items-center gap-2">
+            <input type="date" id="range-from" class="input" style="width:9.5rem">
+            <span class="text-xs" style="color:var(--text-muted)">até</span>
+            <input type="date" id="range-to" class="input" style="width:9.5rem">
+            <button class="btn-primary" id="range-custom-apply">Aplicar</button>
+            <span id="range-custom-error" class="text-xs hidden" style="color:var(--stage-lost-text)"></span>
           </div>
 
           <div class="card p-4">
@@ -942,11 +950,18 @@
     }).join('') || `<tr><td colspan="5" class="py-6 text-center" style="color:var(--text-muted)">Nenhum lead de anúncio ainda.</td></tr>`;
   }
 
-  let statsRangeDays = 30;
+  let statsRange = { days: 30 };
 
   async function loadStats() {
     const epoch = clientEpoch;
-    const res = await fetch(`/api/whatsapp-stats?key=${encodeURIComponent(key)}&client=${encodeURIComponent(currentClient)}&days=${statsRangeDays}`);
+    const params = new URLSearchParams({ key, client: currentClient });
+    if (statsRange.from != null) {
+      params.set('from', statsRange.from);
+      params.set('to', statsRange.to);
+    } else {
+      params.set('days', statsRange.days);
+    }
+    const res = await fetch(`/api/whatsapp-stats?${params}`);
     if (epoch !== clientEpoch) return;
     if (!res.ok) {
       document.getElementById('funnel').innerHTML = errorLine('Não foi possível carregar a Visão Geral: ' + await readError(res));
@@ -960,13 +975,44 @@
     renderByAd(data.by_ad || []);
   }
 
-  document.querySelectorAll('#range-selector button').forEach(btn => {
+  document.querySelectorAll('#range-selector button[data-days]').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('#range-selector button').forEach(b => b.classList.remove('active-range'));
       btn.classList.add('active-range');
-      statsRangeDays = Number(btn.dataset.days);
+      document.getElementById('range-custom-form').classList.add('hidden');
+      statsRange = { days: Number(btn.dataset.days) };
       loadStats();
     });
+  });
+
+  document.getElementById('range-custom-toggle').addEventListener('click', () => {
+    document.getElementById('range-custom-form').classList.toggle('hidden');
+  });
+
+  document.getElementById('range-custom-apply').addEventListener('click', () => {
+    const errorEl = document.getElementById('range-custom-error');
+    errorEl.classList.add('hidden');
+
+    const fromValue = document.getElementById('range-from').value;
+    const toValue = document.getElementById('range-to').value;
+    if (!fromValue || !toValue) {
+      errorEl.textContent = 'Escolha as duas datas.';
+      errorEl.classList.remove('hidden');
+      return;
+    }
+    // Fim do dia selecionado em "até", pra incluir o dia inteiro na janela.
+    const from = Math.floor(new Date(fromValue + 'T00:00:00').getTime() / 1000);
+    const to = Math.floor(new Date(toValue + 'T23:59:59').getTime() / 1000);
+    if (from > to) {
+      errorEl.textContent = '"De" não pode ser depois de "até".';
+      errorEl.classList.remove('hidden');
+      return;
+    }
+
+    document.querySelectorAll('#range-selector button[data-days]').forEach(b => b.classList.remove('active-range'));
+    document.getElementById('range-custom-toggle').classList.add('active-range');
+    statsRange = { from, to };
+    loadStats();
   });
 
   function renderSkeletonRows(tbodyId, cols, rows = 5) {
