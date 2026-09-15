@@ -39,45 +39,62 @@ o clique via `client` (o slug cadastrado na aba "Clientes" do dashboard),
 do mesmo jeito que já hardcoda o número de WhatsApp daquele cliente no
 botão.
 
-## Snippet de referência pra landing page
+## Snippet de referência (instalável via GTM, sem depender de id de botão)
+
+Versão testada e validada em produção (Margel, 2026-09) via Google Tag
+Manager, tag do tipo "HTML personalizado". Não depende de nenhum id
+específico de botão — escuta clique em **qualquer link que aponte pra
+`wa.me` ou `api.whatsapp.com`** na página, e reescreve o `href` no
+momento do clique (antes do navegador seguir o link), o que elimina
+tanto o problema de "cada LP tem uma estrutura diferente" quanto a
+corrida de tempo de um script que só rodasse no carregamento da página:
 
 ```html
 <script>
 (function () {
-  // Lê os identificadores da URL crua (sem decodeURIComponent, pra não
-  // alterar o valor exato que o Google gerou).
-  var qs = location.search.slice(1);
-  function rawParam(name) {
-    var m = new RegExp('(?:^|&)' + name + '=([^&]*)').exec(qs);
-    return m ? m[1] : '';
-  }
-  var gclid = rawParam('gclid'), gbraid = rawParam('gbraid'), wbraid = rawParam('wbraid');
-  if (!gclid && !gbraid && !wbraid) return; // tráfego não veio do Google Ads
+  document.addEventListener('click', function (ev) {
+    var link = ev.target.closest && ev.target.closest('a[href*="wa.me"], a[href*="api.whatsapp.com"]');
+    if (!link) return;
 
-  var code = Array.from({ length: 6 }, function () {
-    return 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'[Math.floor(Math.random() * 36)];
-  }).join('');
+    // Lê os identificadores da URL crua (sem decodeURIComponent, pra não
+    // alterar o valor exato que o Google/UTM gerou).
+    var qs = location.search.slice(1);
+    function rawParam(name) {
+      var m = new RegExp('(?:^|&)' + name + '=([^&]*)').exec(qs);
+      return m ? decodeURIComponent(m[1]) : '';
+    }
+    var gclid = rawParam('gclid'), gbraid = rawParam('gbraid'), wbraid = rawParam('wbraid');
+    var utmSource = rawParam('utm_source'), utmMedium = rawParam('utm_medium'),
+        utmCampaign = rawParam('utm_campaign'), utmContent = rawParam('utm_content'), utmTerm = rawParam('utm_term');
+    if (!gclid && !gbraid && !wbraid && !utmSource) return; // sem nenhum sinal de origem, deixa o link como está
 
-  fetch('https://rastreio-wpp.pages.dev/api/track-click', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      client: '<slug-do-cliente>', // mesmo slug da aba "Clientes" do dashboard
-      code: code, gclid: gclid, gbraid: gbraid, wbraid: wbraid,
-      utm_source: rawParam('utm_source'), utm_medium: rawParam('utm_medium'),
-      utm_campaign: rawParam('utm_campaign'), utm_content: rawParam('utm_content'),
-      utm_term: rawParam('utm_term'), landing_url: location.href,
-    }),
-  }).catch(function () {}); // best-effort, não bloqueia a página
+    var code = Array.from({ length: 6 }, function () {
+      return 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'[Math.floor(Math.random() * 36)];
+    }).join('');
 
-  var link = document.getElementById('whatsapp-cta'); // ajuste o seletor
-  if (link) {
-    var msg = 'Olá! Vim pelo anúncio. Ref: ' + code;
-    link.href = 'https://wa.me/<numero-do-cliente>?text=' + encodeURIComponent(msg);
-  }
+    fetch('https://rastreio-wpp.pages.dev/api/track-click', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client: '<slug-do-cliente>', // mesmo slug da aba "Clientes" do dashboard
+        code: code, gclid: gclid, gbraid: gbraid, wbraid: wbraid,
+        utm_source: utmSource, utm_medium: utmMedium, utm_campaign: utmCampaign,
+        utm_content: utmContent, utm_term: utmTerm, landing_url: location.href,
+      }),
+    }).catch(function () {}); // best-effort, não bloqueia a navegação
+
+    try {
+      var url = new URL(link.href);
+      var existingText = url.searchParams.get('text') || 'Olá! Vim pela página.';
+      url.searchParams.set('text', existingText + ' Ref: ' + code);
+      link.href = url.toString();
+    } catch (e) {}
+  }, true); // fase de captura - roda antes de qualquer outro listener que possa reescrever o href
 })();
 </script>
 ```
+
+A única coisa que muda de cliente pra cliente é o `client: '<slug-do-cliente>'`. O número de WhatsApp **não** entra nesse script — ele só reescreve o link que já existe na página (preserva o texto pré-preenchido que já estava lá, só acrescenta `Ref: <código>` no final).
 
 ## Configuração por cliente (não é código)
 
@@ -119,28 +136,11 @@ botão.
 ## Bridge por UTM (qualquer origem, não só Google Ads)
 
 A mesma rota (`POST /api/track-click`) e o mesmo mecanismo `"Ref: <código>"`
-funcionam sem nenhum `gclid`/`gbraid`/`wbraid` — bastam os campos `utm_*`
-do corpo da requisição. Serve pra qualquer LP que recebe tráfego de
-várias origens (Instagram, e-mail, post orgânico, etc.) e quer saber qual
-delas realmente virou conversa no WhatsApp, não só o Google Ads.
-
-No snippet de referência acima, a única mudança é a condição que decide
-se vale a pena capturar o clique — trocar:
-
-```js
-if (!gclid && !gbraid && !wbraid) return; // tráfego não veio do Google Ads
-```
-
-por:
-
-```js
-if (!gclid && !gbraid && !wbraid && !rawParam('utm_source')) return; // sem nenhum sinal de origem
-```
-
-O resto do snippet (gerar código, `POST /api/track-click`, montar o link
-do WhatsApp com `Ref: <código>`) não muda — os campos `utm_source`,
-`utm_medium`, `utm_campaign`, `utm_content`, `utm_term` que ele já lê da
-URL e já manda no `fetch` passam a ser suficientes por si só.
+já funcionam sem nenhum `gclid`/`gbraid`/`wbraid` — bastam os campos
+`utm_*` da URL (o snippet acima já lê e manda todos). Serve pra qualquer
+LP que recebe tráfego de várias origens (Instagram, e-mail, post
+orgânico, etc.) e quer saber qual delas realmente virou conversa no
+WhatsApp, não só o Google Ads.
 
 Quando o código resolve sem nenhum `gclid`/`gbraid`/`wbraid`, o
 `ad_platform` do contato vira o próprio `utm_source` em minúsculas (ex.:
@@ -171,3 +171,81 @@ Passo a passo: aba Configurações → "Canais fixos" → "Gerar código" →
 copiar o link `wa.me` pronto (ou o texto `Ref: <código>`, se o número de
 WhatsApp ainda não foi preenchido no campo acima) → colar na bio ou no
 botão de WhatsApp do perfil do Google.
+
+## Playbook: implementar num cliente novo
+
+Validado ponta a ponta na Margel (2026-09). Repetir esta lista inteira
+pra cada cliente novo — não precisa reinventar nada, só trocar os
+valores marcados.
+
+### 1. Instalar o script no GTM da LP do cliente
+
+1. Confirmar o **slug** do cliente na aba "Clientes" do dashboard (ex.:
+   `margel`).
+2. No GTM do cliente → **Tags → Nova → HTML personalizado** → colar o
+   snippet da seção acima, trocando só `client: '<slug-do-cliente>'`.
+3. Acionador: **Todas as páginas** (ou "Inicialização - Todas as
+   páginas").
+4. Salvar, nomear a tag algo como `Rastreio WPP - Bridge UTM <cliente>`.
+5. **Testar em modo de Pré-visualização** (Preview) antes de publicar:
+   abrir a LP com `?utm_source=teste&utm_medium=teste` na URL, clicar no
+   link do WhatsApp, e no DevTools (Network → filtro `Fetch/XHR` →
+   digitar `track-click`) confirmar que a chamada aparece com **status
+   200**. Inspecionar o link clicado e confirmar que o `href` ganhou
+   `Ref: <código>` no final.
+6. Só depois do teste passar: **Enviar → Publicar** o container.
+
+### 2. Configurar UTM nas campanhas do Google Ads (se o cliente usar)
+
+Usar a convenção fixa de nomenclatura (evita bagunça no painel depois):
+
+| Canal | `utm_source` | `utm_medium` |
+|---|---|---|
+| Google Ads – Pesquisa | `google` | `cpc` |
+| Google Ads – PMax | `google` | `pmax` |
+| Instagram – bio | `instagram` | `bio` |
+| Instagram – stories | `instagram` | `stories` |
+| WhatsApp – status | `whatsapp` | `status` |
+| Google Meu Negócio | `google` | `gmb` |
+
+`utm_campaign` é o único campo livre — usar um nome curto e estável
+(`pesquisa-<especialidade>`, `pmax-geral`), com data só quando for algo
+pontual (`stories-set-2026`).
+
+Em cada campanha do Google Ads: **Campanha → Configurações → Opções
+adicionais → Opções de URL de campanha → Sufixo de URL final** (é a
+nível de campanha, não de anúncio individual — evita ter que repetir por
+anúncio). Colar, por exemplo:
+```
+utm_source=google&utm_medium=cpc&utm_campaign=pesquisa-<especialidade>
+```
+Clicar em **Testar** pra conferir a URL final simulada antes de salvar.
+Se o cliente já tiver um "Modelo de rastreamento" configurado em algum
+anúncio (tela de "Opções de URL do anúncio"), checar primeiro o que ele
+já gera (botão "Testar" ali) antes de adicionar o sufixo de campanha, pra
+não duplicar/conflitar parâmetros.
+
+### 3. Taguear os canais orgânicos
+
+Colar a UTM na hora de divulgar o link da LP (bio do Instagram, stories,
+posts, status do WhatsApp, etc.), seguindo a mesma tabela do passo 2.
+Exemplo pra bio:
+```
+https://<lp-do-cliente>/?utm_source=instagram&utm_medium=bio&utm_campaign=perfil
+```
+
+### 4. (Opcional) Ativar Google Ads CAPI — pra virar conversão de verdade, não só rótulo
+
+Só necessário se o cliente também quiser que o WhatsApp otimize as
+campanhas pagas dele (não é preciso pra UTM/bio/GMB, que são só
+atribuição de dashboard). Ver "Configuração por cliente" e "Ativação —
+Margel" acima — resumo: Developer Token + credenciais OAuth como env
+vars prefixadas (`<SLUG>_GOOGLE_ADS_*`) + 3 Conversion Actions cadastrados
+na aba Configurações + `GET /api/client-status?client=<slug>` pra
+confirmar que os 4 secrets aparecem como `prefixed`, não `fallback`.
+
+### 5. Validar no dashboard
+
+Mandar uma mensagem de teste de cada origem configurada (Google Ads,
+Instagram, etc.) e conferir na aba Conversas → abrir o contato → seção
+"Origem" que o rótulo e os campos UTM aparecem certos.
