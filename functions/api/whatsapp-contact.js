@@ -46,7 +46,9 @@ export async function onRequestGet(context) {
       SELECT
         wa_id, phone, push_name, ctwa_clid, ad_source_id, ad_headline,
         ad_source_url, ad_media_type, ad_thumbnail_url, is_ctwa, ad_platform,
-        gclid, gbraid, wbraid, first_message_text,
+        gclid, gbraid, wbraid,
+        utm_source, utm_medium, utm_campaign, utm_content, utm_term,
+        first_message_text,
         first_message_at, status, status_source, status_updated_at,
         lead_sent_to_meta, lead_meta_status_code, lead_meta_response_ok,
         created_at, updated_at

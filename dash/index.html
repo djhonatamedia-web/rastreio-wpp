@@ -1694,6 +1694,15 @@
       }
     } else if (contact.ad_platform === 'google') {
       rows.push(`<div class="text-sm">Google Ads <span class="text-xs mono" style="color:var(--text-muted)">${escapeHtml(contact.gclid || contact.gbraid || contact.wbraid || '')}</span></div>`);
+    } else if (contact.utm_source || contact.utm_medium || contact.utm_campaign || contact.utm_content || contact.utm_term) {
+      rows.push(`<div class="text-sm font-medium">${escapeHtml(AD_PLATFORM_LABELS[contact.ad_platform] || contact.ad_platform || contact.utm_source)}</div>`);
+      const utmRows = [
+        ['Origem', contact.utm_source], ['Meio', contact.utm_medium],
+        ['Campanha', contact.utm_campaign], ['Conteúdo', contact.utm_content],
+        ['Termo', contact.utm_term],
+      ].filter(([, v]) => v);
+      rows.push(`<div class="text-xs mono" style="color:var(--text-muted)">${utmRows.map(([k, v]) => `${k}: ${escapeHtml(v)}`).join(' · ')}</div>`);
+      rows.push(`<div class="text-xs" style="color:var(--text-muted)">sem envio de conversão pra nenhuma plataforma</div>`);
     } else if (contact.ad_platform) {
       rows.push(`<div class="text-sm">${escapeHtml(AD_PLATFORM_LABELS[contact.ad_platform] || contact.ad_platform)} <span class="text-xs" style="color:var(--text-muted)">— canal fixo, sem envio de conversão</span></div>`);
     } else {

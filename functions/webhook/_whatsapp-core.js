@@ -164,8 +164,9 @@ export async function processWhatsAppMessage({ raw, env, context, client }) {
         client_id, wa_id, phone, push_name, ctwa_clid, ad_source_id, ad_headline,
         ad_source_url, ad_media_type, ad_thumbnail_url, is_ctwa,
         gclid, gbraid, wbraid, ad_platform,
+        utm_source, utm_medium, utm_campaign, utm_content, utm_term,
         first_message_text, first_message_at, status, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'lead', ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'lead', ?, ?)
     `)
     .bind(
       client.id,
@@ -183,6 +184,11 @@ export async function processWhatsAppMessage({ raw, env, context, client }) {
       click?.gbraid || null,
       click?.wbraid || null,
       extracted.ctwaClid ? 'meta' : platformFor(click),
+      click?.utm_source || null,
+      click?.utm_medium || null,
+      click?.utm_campaign || null,
+      click?.utm_content || null,
+      click?.utm_term || null,
       extracted.text || null,
       extracted.timestamp || now,
       now,
@@ -205,18 +211,23 @@ export async function processWhatsAppMessage({ raw, env, context, client }) {
 // code never made it in - see docs/google-ads-whatsapp.md).
 async function lookupClickCode({ env, client, code }) {
   const row = await env.DB
-    .prepare('SELECT gclid, gbraid, wbraid, channel FROM ad_click_codes WHERE client_id = ? AND code = ?')
+    .prepare('SELECT gclid, gbraid, wbraid, channel, utm_source, utm_medium, utm_campaign, utm_content, utm_term FROM ad_click_codes WHERE client_id = ? AND code = ?')
     .bind(client.id, code)
     .first();
   return row || null;
 }
 
-// A click id means Google Ads; otherwise it's whatever fixed channel the
-// code was registered under (bio/gmb) - see migrations/0007_channel_codes.sql.
+// A click id means Google Ads; a fixed channel code (bio/gmb - see
+// migrations/0007_channel_codes.sql) means that channel; otherwise, if the
+// landing page captured UTMs with no ad click id at all (Instagram, email,
+// etc. - see migrations/0008_utm_attribution.sql), fall back to utm_source
+// as the platform label. Lowercased so "Instagram" and "instagram" group
+// together regardless of how the landing page's own URL capitalized it.
 function platformFor(click) {
   if (!click) return null;
   if (click.gclid || click.gbraid || click.wbraid) return 'google';
-  return click.channel || null;
+  if (click.channel) return click.channel;
+  return click.utm_source ? click.utm_source.toLowerCase() : null;
 }
 
 async function markClickCodeMatched({ env, client, code, waId, now }) {
@@ -233,8 +244,18 @@ async function backfillClickAttribution({ env, client, waId, code, now }) {
   if (!click) return;
 
   await env.DB
-    .prepare('UPDATE whatsapp_contacts SET gclid = ?, gbraid = ?, wbraid = ?, ad_platform = ?, updated_at = ? WHERE client_id = ? AND wa_id = ?')
-    .bind(click.gclid || null, click.gbraid || null, click.wbraid || null, platformFor(click), now, client.id, waId)
+    .prepare(`
+      UPDATE whatsapp_contacts SET
+        gclid = ?, gbraid = ?, wbraid = ?, ad_platform = ?,
+        utm_source = ?, utm_medium = ?, utm_campaign = ?, utm_content = ?, utm_term = ?,
+        updated_at = ?
+      WHERE client_id = ? AND wa_id = ?
+    `)
+    .bind(
+      click.gclid || null, click.gbraid || null, click.wbraid || null, platformFor(click),
+      click.utm_source || null, click.utm_medium || null, click.utm_campaign || null, click.utm_content || null, click.utm_term || null,
+      now, client.id, waId
+    )
     .run();
 
   await markClickCodeMatched({ env, client, code, waId, now });

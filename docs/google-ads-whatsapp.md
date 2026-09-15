@@ -116,6 +116,40 @@ botão.
    (não `fallback` — isso pegaria emprestado a credencial de outro
    cliente) e que os IDs de configuração estão presentes.
 
+## Bridge por UTM (qualquer origem, não só Google Ads)
+
+A mesma rota (`POST /api/track-click`) e o mesmo mecanismo `"Ref: <código>"`
+funcionam sem nenhum `gclid`/`gbraid`/`wbraid` — bastam os campos `utm_*`
+do corpo da requisição. Serve pra qualquer LP que recebe tráfego de
+várias origens (Instagram, e-mail, post orgânico, etc.) e quer saber qual
+delas realmente virou conversa no WhatsApp, não só o Google Ads.
+
+No snippet de referência acima, a única mudança é a condição que decide
+se vale a pena capturar o clique — trocar:
+
+```js
+if (!gclid && !gbraid && !wbraid) return; // tráfego não veio do Google Ads
+```
+
+por:
+
+```js
+if (!gclid && !gbraid && !wbraid && !rawParam('utm_source')) return; // sem nenhum sinal de origem
+```
+
+O resto do snippet (gerar código, `POST /api/track-click`, montar o link
+do WhatsApp com `Ref: <código>`) não muda — os campos `utm_source`,
+`utm_medium`, `utm_campaign`, `utm_content`, `utm_term` que ele já lê da
+URL e já manda no `fetch` passam a ser suficientes por si só.
+
+Quando o código resolve sem nenhum `gclid`/`gbraid`/`wbraid`, o
+`ad_platform` do contato vira o próprio `utm_source` em minúsculas (ex.:
+`utm_source=Instagram` → `ad_platform = 'instagram'`) e os 5 campos UTM
+completos ficam salvos no contato, visíveis no painel "Origem" do
+dashboard. Assim como bio/GMB, **não gera envio de conversão** pra
+nenhuma plataforma de anúncio — é atribuição só de dashboard, já que não
+existe um `gclid` de verdade pra reportar de volta.
+
 ## Canais fixos: bio, Google Meu Negócio (sem clique rastreável)
 
 Link na bio do Instagram/TikTok e o perfil do Google Meu Negócio não têm

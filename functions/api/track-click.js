@@ -32,8 +32,13 @@ export async function onRequestPost(context) {
   if (!code) {
     return json({ error: 'code is required' }, 400);
   }
-  if (!gclid && !gbraid && !wbraid) {
-    return json({ error: 'at least one of gclid, gbraid, wbraid is required' }, 400);
+  // Google Ads click id OR any UTM field - a click with neither carries no
+  // attribution signal at all, so there'd be nothing to bridge to the
+  // WhatsApp message. UTM-only clicks (Instagram, email, etc. - no ad
+  // click id) are valid: see docs/google-ads-whatsapp.md.
+  const hasAttribution = gclid || gbraid || wbraid || utm_source || utm_medium || utm_campaign || utm_content || utm_term;
+  if (!hasAttribution) {
+    return json({ error: 'ao menos um identificador (gclid/gbraid/wbraid) ou campo utm_* e obrigatorio' }, 400);
   }
 
   const client = await resolveClientBySlug(env, clientSlug);
