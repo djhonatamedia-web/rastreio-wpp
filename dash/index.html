@@ -1677,6 +1677,16 @@
     document.getElementById('contact-body').innerHTML = blocks.join('');
   }
 
+  const UTM_FIELD_LABELS = { utm_source: 'Origem', utm_medium: 'Meio', utm_campaign: 'Campanha', utm_content: 'Conteúdo', utm_term: 'Termo' };
+
+  // Builds a "Campanha: x · Meio: y" line from whichever of the given UTM
+  // fields the contact actually has - empty string if none are set.
+  function utmDetailLine(contact, fields) {
+    const parts = fields.map(f => [UTM_FIELD_LABELS[f], contact[f]]).filter(([, v]) => v);
+    if (!parts.length) return '';
+    return `<div class="text-xs mono" style="color:var(--text-muted)">${parts.map(([k, v]) => `${k}: ${escapeHtml(v)}`).join(' · ')}</div>`;
+  }
+
   function renderOrigin(contact) {
     const rows = [];
     if (contact.is_ctwa) {
@@ -1694,14 +1704,14 @@
       }
     } else if (contact.ad_platform === 'google') {
       rows.push(`<div class="text-sm">Google Ads <span class="text-xs mono" style="color:var(--text-muted)">${escapeHtml(contact.gclid || contact.gbraid || contact.wbraid || '')}</span></div>`);
+      // gclid já garante a atribuição/conversão - o UTM aqui é só pra
+      // diferenciar Pesquisa de PMax etc. no painel (ver sufixo de URL
+      // final configurado por campanha no Google Ads).
+      const googleUtmLine = utmDetailLine(contact, ['utm_campaign', 'utm_medium', 'utm_content', 'utm_term']);
+      if (googleUtmLine) rows.push(googleUtmLine);
     } else if (contact.utm_source || contact.utm_medium || contact.utm_campaign || contact.utm_content || contact.utm_term) {
       rows.push(`<div class="text-sm font-medium">${escapeHtml(AD_PLATFORM_LABELS[contact.ad_platform] || contact.ad_platform || contact.utm_source)}</div>`);
-      const utmRows = [
-        ['Origem', contact.utm_source], ['Meio', contact.utm_medium],
-        ['Campanha', contact.utm_campaign], ['Conteúdo', contact.utm_content],
-        ['Termo', contact.utm_term],
-      ].filter(([, v]) => v);
-      rows.push(`<div class="text-xs mono" style="color:var(--text-muted)">${utmRows.map(([k, v]) => `${k}: ${escapeHtml(v)}`).join(' · ')}</div>`);
+      rows.push(utmDetailLine(contact, ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term']));
       rows.push(`<div class="text-xs" style="color:var(--text-muted)">sem envio de conversão pra nenhuma plataforma</div>`);
     } else if (contact.ad_platform) {
       rows.push(`<div class="text-sm">${escapeHtml(AD_PLATFORM_LABELS[contact.ad_platform] || contact.ad_platform)} <span class="text-xs" style="color:var(--text-muted)">— canal fixo, sem envio de conversão</span></div>`);
