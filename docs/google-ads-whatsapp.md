@@ -41,13 +41,25 @@ botão.
 
 ## Snippet de referência (instalável via GTM, sem depender de id de botão)
 
-Versão testada e validada em produção (Margel, 2026-09) via Google Tag
-Manager, tag do tipo "HTML personalizado". Não depende de nenhum id
-específico de botão — escuta clique em **qualquer link que aponte pra
-`wa.me` ou `api.whatsapp.com`** na página, e reescreve o `href` no
-momento do clique (antes do navegador seguir o link), o que elimina
-tanto o problema de "cada LP tem uma estrutura diferente" quanto a
-corrida de tempo de um script que só rodasse no carregamento da página:
+Não depende de nenhum id específico de botão — escuta clique em
+**qualquer link que aponte pra `wa.me` ou `api.whatsapp.com`** na
+página, o que resolve o problema de "cada LP tem uma estrutura
+diferente".
+
+**Histórico de um bug já corrigido (Margel, 2026-09):** a primeira
+versão reescrevia `link.href` diretamente no clique. Isso funcionou nos
+nossos testes manuais, mas falhou silenciosamente em produção pra
+cliques reais — confirmado via D1 (`ad_click_codes` tinha `gclid` real
+capturado, mas `matched_wa_id` sempre nulo, e nenhuma mensagem real
+chegava com `Ref:` no texto). Causa: os botões da LP usam
+`target="_blank"` (abrem em nova aba) — nesse caso, vários navegadores
+(principalmente no celular) já iniciam a navegação da nova aba com a
+URL **original** antes do clique terminar de processar, então mudar
+`link.href` no meio do caminho chega tarde demais pra afetar a aba que
+já está abrindo. A versão abaixo evita isso: cancela a navegação padrão
+(`preventDefault`) e abre a aba **nós mesmos**, já com a URL final
+(`Ref:` incluído) — nunca deixa o navegador decidir sozinho com que URL
+abrir.
 
 ```html
 <script>
@@ -83,18 +95,24 @@ corrida de tempo de um script que só rodasse no carregamento da página:
       }),
     }).catch(function () {}); // best-effort, não bloqueia a navegação
 
+    // Cancela a navegação padrão e abrimos nós mesmos, com a URL final -
+    // não confiar em mutar link.href a tempo (ver nota acima sobre
+    // target="_blank").
     try {
       var url = new URL(link.href);
       var existingText = url.searchParams.get('text') || 'Olá! Vim pela página.';
       url.searchParams.set('text', existingText + ' Ref: ' + code);
-      link.href = url.toString();
+      ev.preventDefault();
+      window.open(url.toString(), '_blank', 'noopener');
     } catch (e) {}
-  }, true); // fase de captura - roda antes de qualquer outro listener que possa reescrever o href
+  }, true); // fase de captura - roda antes de qualquer outro listener da página
 })();
 </script>
 ```
 
 A única coisa que muda de cliente pra cliente é o `client: '<slug-do-cliente>'`. O número de WhatsApp **não** entra nesse script — ele só reescreve o link que já existe na página (preserva o texto pré-preenchido que já estava lá, só acrescenta `Ref: <código>` no final).
+
+**Se algum navegador bloquear o `window.open`** (pop-up blocker, raro já que é síncrono dentro de um clique real de usuário, mas pode acontecer em alguns navegadores mais restritivos): o `try/catch` evita quebrar a página, mas o clique original não navega em lugar nenhum nesse caso raro. Se isso for observado em algum cliente, a alternativa é usar `location.href = url.toString()` (mesma aba) em vez de `window.open`, abrindo mão do "nova aba" - decidir caso a caso, não preventivamente.
 
 ## Configuração por cliente (não é código)
 
