@@ -1,4 +1,4 @@
-// Google Ads API (v21 REST) - uploadClickConversions, ported from
+// Google Ads API (REST) - uploadClickConversions, ported from
 // krob-tracking-stack-main/functions/webhook/_core.js (sendToGoogleAds),
 // generalized for a per-funnel-stage conversion instead of a per-product
 // Purchase.
@@ -8,11 +8,24 @@
 // getClientSecret), so the OAuth token cache below is keyed per client.id,
 // not a single module-level token like the original krob version.
 //
-// Pinning v21 in the URL: the Google Ads SDKs lag the REST API and break
-// with "API version not found" - call REST directly, same as krob does.
-
+// Pinning a version in the URL: the Google Ads SDKs lag the REST API and
+// break with "API version not found" - call REST directly, same as krob.
+//
+// *** THE VERSION EXPIRES *** Google sunsets each API version roughly a year
+// after release, and a sunset version answers a bare 404 - not a JSON error,
+// so the dashboard shows no readable reason. This is what silently broke the
+// first real Google Ads send (Margel, 2026-09-23): v21 was gone (v19-v21
+// answer 404, v22+ answer 401). Credentials, token and ids were all fine;
+// they were never even evaluated. When a Google Ads send fails with an
+// empty-bodied 404, check this first:
+//   for v in v22 v23 v24 v25 v26; do curl -s -o /dev/null -w "$v %{http_code}\n" \
+//     -X POST "https://googleads.googleapis.com/$v/customers/1:uploadClickConversions" \
+//     -H 'Content-Type: application/json' -d '{}'; done
+// (401 = version alive, 404 = sunset), then bump the constant below.
 import { getConfigValues } from './client-config.js';
 import { getClientSecret } from './clients.js';
+
+const GOOGLE_ADS_API_VERSION = 'v23';
 
 const googleAdsTokenCache = new Map(); // clientId -> { token, expiresAt }
 
@@ -139,7 +152,7 @@ export async function sendGoogleAdsConversion({ conversionActionId, gclid, gbrai
   if (developerToken) headers['developer-token'] = developerToken;
 
   const response = await fetch(
-    `https://googleads.googleapis.com/v21/customers/${customerId}:uploadClickConversions`,
+    `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}/customers/${customerId}:uploadClickConversions`,
     { method: 'POST', headers, body: payloadJson }
   );
 

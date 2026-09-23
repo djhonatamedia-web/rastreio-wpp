@@ -119,7 +119,13 @@ export async function onRequestGet(context) {
         meta_error: row.meta_response_ok !== 1 ? extractApiError(row.meta_response_body) : null,
         google_ads_status_code: row.google_ads_status_code,
         google_ads_response_ok: row.google_ads_response_ok === 1,
-        google_ads_error: row.google_ads_response_ok !== 1 ? extractApiError(row.google_ads_response_body) : null,
+        // A sunset API version answers a bare 404 with no JSON, which
+        // extractApiError() can't read - fall back to the status code so a
+        // failed send is never shown as a silent blank (see the note at the
+        // top of functions/_shared/google-ads-capi.js).
+        google_ads_error: row.google_ads_response_ok !== 1 && row.google_ads_status_code
+          ? (extractApiError(row.google_ads_response_body) || `HTTP ${row.google_ads_status_code} sem detalhe (versão da API do Google pode ter sido desativada)`)
+          : null,
       });
     }
 
