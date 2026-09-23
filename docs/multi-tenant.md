@@ -42,8 +42,9 @@ cliente dentro da mesma implantação" — ver migration `0006_multi_tenant.sql`
 2. Colar a URL de webhook mostrada na uazapi desse cliente.
 3. Criar no Cloudflare Pages as secrets prefixadas que esse cliente
    precisar: `<SLUG>_META_ACCESS_TOKEN` (Meta) e/ou
-   `<SLUG>_GOOGLE_ADS_CLIENT_ID` / `_CLIENT_SECRET` / `_REFRESH_TOKEN` /
-   `_DEVELOPER_TOKEN` (Google Ads).
+   `<SLUG>_GOOGLE_ADS_CLIENT_ID` / `_CLIENT_SECRET` / `_REFRESH_TOKEN`
+   (Google Ads — sem developer token, encerrado pelo Google em 2026-09-09;
+   ver `docs/google-ads-whatsapp.md`).
 4. Dashboard → aba "Configurações", com esse cliente selecionado →
    preencher Pixel ID / Page ID / Customer ID / Conversion Actions.
 5. Selecionar o cliente no seletor do topo do dashboard pra ver os dados

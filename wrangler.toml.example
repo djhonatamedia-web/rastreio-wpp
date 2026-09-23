@@ -36,12 +36,14 @@ database_id = "__REPLACE_ME_DB_ID__"
 # client's slug in upper case (functions/_shared/clients.js,
 # getClientSecret) — e.g. for slug "tintim":
 #   TINTIM_META_ACCESS_TOKEN
-#   TINTIM_GOOGLE_ADS_CLIENT_ID / _CLIENT_SECRET / _REFRESH_TOKEN / _DEVELOPER_TOKEN
+#   TINTIM_GOOGLE_ADS_CLIENT_ID / _CLIENT_SECRET / _REFRESH_TOKEN
 # A client created before multi-tenant existed keeps working off the
 # unprefixed name (getClientSecret falls back to env[name] with no
 # prefix) — only new clients need the prefix from day one:
 #   META_ACCESS_TOKEN, GOOGLE_ADS_CLIENT_ID, GOOGLE_ADS_CLIENT_SECRET,
-#   GOOGLE_ADS_REFRESH_TOKEN, GOOGLE_ADS_DEVELOPER_TOKEN
+#   GOOGLE_ADS_REFRESH_TOKEN
+# (No GOOGLE_ADS_DEVELOPER_TOKEN: Google sunset it on 2026-09-09; it is
+# still sent if present, but no longer required.)
 #
 # Non-secret ad-platform ids (META_PIXEL_ID, META_PAGE_ID,
 # GOOGLE_ADS_CUSTOMER_ID, GOOGLE_ADS_LOGIN_CUSTOMER_ID,

@@ -1649,7 +1649,7 @@
     list.innerHTML = clients.map(c => {
       const webhookUrl = `${location.origin}/webhook/whatsapp/${c.webhook_slug}`;
       const prefix = c.slug.toUpperCase().replace(/-/g, '_');
-      const secretNames = ['META_ACCESS_TOKEN', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_REFRESH_TOKEN', 'GOOGLE_ADS_DEVELOPER_TOKEN'];
+      const secretNames = ['META_ACCESS_TOKEN', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET', 'GOOGLE_ADS_REFRESH_TOKEN'];
       return `
         <div class="rounded-lg p-3 text-sm space-y-1.5 border">
           <div class="flex items-center gap-2 font-medium">

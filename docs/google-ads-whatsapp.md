@@ -116,12 +116,28 @@ A única coisa que muda de cliente pra cliente é o `client: '<slug-do-cliente>'
 
 ## Configuração por cliente (não é código)
 
-- Developer Token do Google Ads (aprovação da Google, por MCC).
-- OAuth Client ID/Secret + Refresh Token — mesmas env vars do
-  `krob-tracking-stack-main` (`GOOGLE_ADS_CLIENT_ID`,
-  `GOOGLE_ADS_CLIENT_SECRET`, `GOOGLE_ADS_REFRESH_TOKEN`,
-  `GOOGLE_ADS_CUSTOMER_ID`, `GOOGLE_ADS_LOGIN_CUSTOMER_ID`,
-  `GOOGLE_ADS_DEVELOPER_TOKEN`) — reusar se for a mesma conta MCC.
+- **Sem Developer Token.** O Google encerrou o token de desenvolvedor em
+  2026-09-09: o cabeçalho é opcional e ignorado pela API. O nível de
+  acesso agora é do **projeto Google Cloud** que emitiu as credenciais
+  OAuth (Cloud Console → Google Ads API → Visão geral → Níveis de
+  acesso). O nível "Explorador" (aprovação automática) já libera contas de
+  produção com 2.880 operações/dia — de sobra pra conversões de WhatsApp.
+  O código ainda manda `GOOGLE_ADS_DEVELOPER_TOKEN` se a variável existir,
+  mas não exige mais.
+- OAuth Client ID/Secret + Refresh Token (`GOOGLE_ADS_CLIENT_ID`,
+  `GOOGLE_ADS_CLIENT_SECRET`, `GOOGLE_ADS_REFRESH_TOKEN`) e, no dashboard,
+  `GOOGLE_ADS_CUSTOMER_ID` / `GOOGLE_ADS_LOGIN_CUSTOMER_ID` (o MCC, quando
+  a conta é acessada por gerente).
+- **Publicar o app OAuth antes de gerar o Refresh Token.** Com a tela de
+  consentimento em modo "Teste", o Google emite refresh token que expira
+  em 7 dias (`refresh_token_expires_in: 604799`) e a integração para sem
+  aviso. Publicado ("Google Auth Platform → Público-alvo → Publicar app"),
+  não expira; o aviso de "app não verificado" no consentimento é esperado.
+- **Gerar o Refresh Token uma vez só:** no OAuth Playground, copie o
+  `refresh_token` logo na primeira troca do código. O código de
+  autorização só serve uma vez (segunda tentativa dá `invalid_grant`), e
+  refazer a autorização várias vezes seguidas dispara bloqueio de
+  segurança do Google (aconteceu: 6 dias de espera).
 - Criar um Conversion Action (tipo Importação/Clique) por estágio no
   Google Ads, e configurar o ID de cada um em
   `GOOGLE_ADS_CONVERSION_ACTION_QUALIFIED` /
@@ -132,13 +148,12 @@ A única coisa que muda de cliente pra cliente é o `client: '<slug-do-cliente>'
 
 ## Ativação — Margel (2026-09)
 
-1. Developer Token aprovado na conta MCC (aprovação da Google — fora do
-   nosso controle, acompanhar no painel do Google Ads).
+1. Projeto Google Cloud com a Google Ads API ativada e nível de acesso
+   "Explorador" aprovado (sem Developer Token — ver acima).
 2. OAuth Client ID/Secret + Refresh Token → Cloudflare Pages, como env
    vars prefixadas: `MARGEL_GOOGLE_ADS_CLIENT_ID`,
-   `MARGEL_GOOGLE_ADS_CLIENT_SECRET`, `MARGEL_GOOGLE_ADS_REFRESH_TOKEN`,
-   `MARGEL_GOOGLE_ADS_DEVELOPER_TOKEN` (ver `getClientSecret()` em
-   `functions/_shared/clients.js`).
+   `MARGEL_GOOGLE_ADS_CLIENT_SECRET`, `MARGEL_GOOGLE_ADS_REFRESH_TOKEN`
+   (ver `getClientSecret()` em `functions/_shared/clients.js`).
 3. Criar 3 Conversion Actions (Qualificado/Agendado/Venda) na conta do
    Margel e colar os IDs na aba "Configurações" do dashboard — junto com
    `GOOGLE_ADS_CUSTOMER_ID`/`GOOGLE_ADS_LOGIN_CUSTOMER_ID` (não são
@@ -147,7 +162,7 @@ A única coisa que muda de cliente pra cliente é o `client: '<slug-do-cliente>'
    `client: 'margel'` e o número de WhatsApp dele no lugar de
    `<numero-do-cliente>`.
 5. Antes de testar um clique real: `GET /api/client-status?key=<DASH_KEY>&client=margel`
-   e conferir que os 4 secrets do Google Ads aparecem como `prefixed`
+   e conferir que os secrets do Google Ads aparecem como `prefixed`
    (não `fallback` — isso pegaria emprestado a credencial de outro
    cliente) e que os IDs de configuração estão presentes.
 

@@ -10,8 +10,8 @@ completa em `EDITABLE_CONFIG_KEYS`, `functions/_shared/client-config.js`.
 
 Esses IDs não dão acesso a nada sozinhos — saber o Pixel ID de alguém não
 deixa você mandar evento em nome dele. Já `META_ACCESS_TOKEN`,
-`GOOGLE_ADS_CLIENT_SECRET`, `GOOGLE_ADS_REFRESH_TOKEN` e
-`GOOGLE_ADS_DEVELOPER_TOKEN` são credenciais reais — quem tiver isso
+`GOOGLE_ADS_CLIENT_SECRET` e `GOOGLE_ADS_REFRESH_TOKEN` são
+credenciais reais — quem tiver isso
 consegue agir como o cliente nas APIs da Meta/Google.
 
 Um secret configurado como env var no Cloudflare Pages é criptografado e

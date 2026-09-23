@@ -81,12 +81,16 @@ function formatConversionDateTime(unixSeconds, offsetString) {
 // stage-specific, read from D1/env by the caller - see
 // STAGE_TO_GOOGLE_ADS_ENV_VAR in config/whatsapp.js).
 export async function sendGoogleAdsConversion({ conversionActionId, gclid, gbraid, wbraid, value, currency, eventTime, env, client }) {
-  // OAuth credentials + developer token are real secrets, Cloudflare-env-only, per client.
+  // OAuth credentials are real secrets, Cloudflare-env-only, per client.
+  // The developer token is optional: Google sunset it on 2026-09-09 (API
+  // access levels now belong to the Cloud project that issued the OAuth
+  // credentials, and the header is ignored by the API servers). It's still
+  // sent below when a client happens to have one configured.
   const developerToken = getClientSecret(env, client, 'GOOGLE_ADS_DEVELOPER_TOKEN');
   const oauthClientId = getClientSecret(env, client, 'GOOGLE_ADS_CLIENT_ID');
   const oauthClientSecret = getClientSecret(env, client, 'GOOGLE_ADS_CLIENT_SECRET');
   const refreshToken = getClientSecret(env, client, 'GOOGLE_ADS_REFRESH_TOKEN');
-  if (!developerToken || !oauthClientId || !oauthClientSecret || !refreshToken) {
+  if (!oauthClientId || !oauthClientSecret || !refreshToken) {
     return { skipped: 'missing google ads env', payload: null, response: null };
   }
   if (!conversionActionId) {
@@ -127,18 +131,16 @@ export async function sendGoogleAdsConversion({ conversionActionId, gclid, gbrai
   const body = { conversions: [conversion], partialFailure: true, validateOnly: false };
   const payloadJson = JSON.stringify(body);
 
+  const headers = {
+    'Authorization': `Bearer ${accessToken}`,
+    'login-customer-id': loginCustomerId,
+    'Content-Type': 'application/json',
+  };
+  if (developerToken) headers['developer-token'] = developerToken;
+
   const response = await fetch(
     `https://googleads.googleapis.com/v21/customers/${customerId}:uploadClickConversions`,
-    {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'developer-token': developerToken,
-        'login-customer-id': loginCustomerId,
-        'Content-Type': 'application/json',
-      },
-      body: payloadJson,
-    }
+    { method: 'POST', headers, body: payloadJson }
   );
 
   return { payload: payloadJson, response };
