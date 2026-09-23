@@ -376,6 +376,8 @@
             <span id="range-custom-error" class="text-xs hidden" style="color:var(--stage-lost-text)"></span>
           </div>
 
+          <div id="click-health" class="card p-4"></div>
+
           <div class="card p-4">
             <div class="flex items-center justify-between mb-3">
               <div class="font-semibold text-sm">Funil</div>
@@ -385,6 +387,24 @@
               </div>
             </div>
             <div id="funnel" class="space-y-1"></div>
+          </div>
+
+          <div class="card p-4">
+            <div class="font-semibold text-sm mb-3">Canais de aquisição</div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="text-left text-xs uppercase tracking-wider border-b" style="color:var(--text-muted)">
+                    <th class="py-2 pr-3">Canal</th>
+                    <th class="py-2 pr-3">Leads</th>
+                    <th class="py-2 pr-3">Qualificados</th>
+                    <th class="py-2 pr-3">Vendas</th>
+                    <th class="py-2 pr-3">Conversão</th>
+                  </tr>
+                </thead>
+                <tbody id="by-channel-body" class="mono"></tbody>
+              </table>
+            </div>
           </div>
 
           <div class="card p-4">
@@ -535,6 +555,35 @@
             <label class="text-xs" style="color:var(--text-dim)">Número de WhatsApp deste cliente (só pra montar o link abaixo, não é salvo)</label>
             <input type="text" id="channel-wa-number" class="input mono mt-1 mb-3" placeholder="5511999998888" oninput="onChannelNumberInput()">
             <div class="space-y-3" id="config-fields-channels"></div>
+          </div>
+          <div class="card p-4">
+            <div class="flex items-center justify-between mb-1">
+              <div class="font-semibold text-sm">Cliques capturados</div>
+              <button class="action-btn" onclick="loadAdClicks()"><svg class="icon"><use href="#icon-refresh"/></svg></button>
+            </div>
+            <div class="text-xs mb-3" style="color:var(--text-dim)">
+              Diagnóstico: todo clique que a landing page mandou pro
+              <code class="mono">track-click</code>, tenha virado conversa ou
+              não. Um código sem <code class="mono">Casou?</code> é um lead
+              que clicou no anúncio/link mas nunca mandou a mensagem
+              pré-preenchida (ou apagou o texto antes de enviar).
+            </div>
+            <label class="flex items-center gap-2 text-sm mb-3" style="color:var(--text-dim)">
+              <input type="checkbox" id="ad-clicks-unmatched" onchange="loadAdClicks()"> só não convertidos
+            </label>
+            <div class="table-scroll overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="text-left text-xs uppercase tracking-wider border-b" style="color:var(--text-muted)">
+                    <th class="py-2 pr-3">Código</th>
+                    <th class="py-2 pr-3">Origem</th>
+                    <th class="py-2 pr-3">Casou?</th>
+                    <th class="py-2 pr-3">Capturado em</th>
+                  </tr>
+                </thead>
+                <tbody id="ad-clicks-body" class="mono"></tbody>
+              </table>
+            </div>
           </div>
         </section>
 
@@ -784,7 +833,7 @@
     // missing: staying on "Configuracoes" or "Palavras-chave" while
     // switching clients left the previous client's data up.
     if (currentTab === 'keywords') loadKeywords();
-    if (currentTab === 'config') { loadConfig(); loadClientStatus(); loadChannelCodes(); }
+    if (currentTab === 'config') { loadConfig(); loadClientStatus(); loadChannelCodes(); loadAdClicks(); }
   }
 
   function clearClientViews() {
@@ -804,7 +853,9 @@
     renderSkeletonRows('conversas-body', 7);
     renderSkeletonRows('eventos-body', 7);
     renderSkeletonRows('by-ad-body', 5);
+    renderSkeletonRows('by-channel-body', 5);
     document.getElementById('funnel').innerHTML = '';
+    document.getElementById('click-health').innerHTML = '';
     document.getElementById('status-counts').innerHTML = '';
     if (currentTab === 'keywords') document.getElementById('keywords-board').innerHTML = '';
     if (currentTab === 'config') {
@@ -812,6 +863,7 @@
       document.getElementById('config-fields-google').innerHTML = '';
       document.getElementById('config-fields-channels').innerHTML = '';
       document.getElementById('client-status-body').innerHTML = loadingLine('Carregando status…');
+      renderSkeletonRows('ad-clicks-body', 5);
     }
   }
 
@@ -854,7 +906,7 @@
     document.getElementById('tab-clientes').classList.toggle('hidden', target !== 'clientes');
     document.getElementById('page-title').textContent = TAB_TITLES[target] || '';
     if (target === 'keywords') loadKeywords();
-    if (target === 'config') { loadConfig(); loadClientStatus(); loadChannelCodes(); }
+    if (target === 'config') { loadConfig(); loadClientStatus(); loadChannelCodes(); loadAdClicks(); }
     if (target === 'clientes') loadClientsAdmin();
     if (window.innerWidth < 1024) toggleSidebar(false);
   }
@@ -955,6 +1007,55 @@
     }).join('') || `<tr><td colspan="5" class="py-6 text-center" style="color:var(--text-muted)">Nenhum lead de anúncio ainda.</td></tr>`;
   }
 
+  function renderByChannel(rows) {
+    const body = document.getElementById('by-channel-body');
+    body.innerHTML = (rows || []).map(r => {
+      const conv = r.leads ? Math.round((r.qualified / r.leads) * 100) : 0;
+      const label = r.channel === 'meta' ? 'Meta Ads' : r.channel === 'organico' ? 'Orgânico' : (AD_PLATFORM_LABELS[r.channel] || r.channel);
+      return `
+        <tr class="row-hover border-b">
+          <td class="py-2 pr-3">${escapeHtml(label)}</td>
+          <td class="py-2 pr-3">${r.leads}</td>
+          <td class="py-2 pr-3">${r.qualified}</td>
+          <td class="py-2 pr-3">${r.sale}</td>
+          <td class="py-2 pr-3">${conv}%</td>
+        </tr>
+      `;
+    }).join('') || `<tr><td colspan="5" class="py-6 text-center" style="color:var(--text-muted)">Nenhum lead no período.</td></tr>`;
+  }
+
+  // Cor de acordo com a fração de cliques capturados que viraram conversa
+  // de verdade - uma taxa baixa é o sinal de que a ponte LP -> WhatsApp
+  // quebrou silenciosamente (ver nota em functions/api/whatsapp-stats.js).
+  function renderClickHealth(health) {
+    const el = document.getElementById('click-health');
+    const total = health.total || 0;
+    const matched = health.matched || 0;
+    if (!total) {
+      el.innerHTML = `
+        <div class="flex items-center justify-between">
+          <div class="font-semibold text-sm">Saúde do rastreio</div>
+          <div class="text-sm" style="color:var(--text-muted)">Nenhum clique capturado no período.</div>
+        </div>
+      `;
+      return;
+    }
+    const pct = Math.round((matched / total) * 100);
+    let color = 'var(--chart-sale)'; // verde
+    if (total >= 5 && pct < 15) color = 'var(--stage-lost-text)'; // vermelho
+    else if (pct < 50) color = 'var(--chart-scheduled)'; // amarelo
+    el.innerHTML = `
+      <div class="flex items-center justify-between flex-wrap gap-2">
+        <div class="font-semibold text-sm">Saúde do rastreio</div>
+        <div class="text-sm mono">
+          <span style="color:var(--text-muted)">Cliques capturados:</span> ${total}
+          <span style="color:var(--text-muted)"> · Viraram conversa:</span> ${matched}
+          <span style="color:${color};font-weight:600"> (${pct}%)</span>
+        </div>
+      </div>
+    `;
+  }
+
   let statsRange = { days: 30 };
 
   async function loadStats() {
@@ -971,6 +1072,8 @@
     if (!res.ok) {
       document.getElementById('funnel').innerHTML = errorLine('Não foi possível carregar a Visão Geral: ' + await readError(res));
       document.getElementById('by-ad-body').innerHTML = '';
+      document.getElementById('by-channel-body').innerHTML = '';
+      document.getElementById('click-health').innerHTML = '';
       return;
     }
     const data = await res.json();
@@ -978,6 +1081,8 @@
     renderFunnel(data.funnel.ads, data.funnel.organic);
     renderEvolutionChart(data.timeseries || []);
     renderByAd(data.by_ad || []);
+    renderByChannel(data.by_channel || []);
+    renderClickHealth(data.click_health || { total: 0, matched: 0 });
   }
 
   document.querySelectorAll('#range-selector button[data-days]').forEach(btn => {
@@ -1356,6 +1461,37 @@
     currentChannelCodes = {};
     (data.codes || []).forEach(c => currentChannelCodes[c.channel] = c);
     renderChannelLinks();
+  }
+
+  async function loadAdClicks() {
+    const epoch = clientEpoch;
+    const unmatchedOnly = document.getElementById('ad-clicks-unmatched').checked ? '1' : '0';
+    const params = new URLSearchParams({ key, client: currentClient, unmatched: unmatchedOnly });
+    const res = await fetch(`/api/ad-clicks?${params}`);
+    if (epoch !== clientEpoch) return;
+    const body = document.getElementById('ad-clicks-body');
+    if (!res.ok) {
+      body.innerHTML = `<tr><td colspan="4">${errorLine('Não foi possível carregar os cliques: ' + await readError(res))}</td></tr>`;
+      return;
+    }
+    const data = await res.json();
+    if (epoch !== clientEpoch) return;
+    body.innerHTML = (data.clicks || []).map(c => {
+      const origin = c.gclid || c.gbraid || c.wbraid
+        ? `Google Ads`
+        : (c.channel ? (CHANNEL_LABELS[c.channel] || c.channel) : (c.utm_source || '—'));
+      const matched = c.matched_wa_id
+        ? `<span style="color:var(--chart-sale)">✓ ${escapeHtml(c.matched_wa_id.split('@')[0])}</span>`
+        : `<span style="color:var(--text-muted)">—</span>`;
+      return `
+        <tr class="row-hover border-b">
+          <td class="py-2 pr-3">${escapeHtml(c.code)}</td>
+          <td class="py-2 pr-3" title="${escapeHtml(c.utm_source || '')} ${escapeHtml(c.utm_medium || '')} ${escapeHtml(c.utm_campaign || '')}">${escapeHtml(origin)}</td>
+          <td class="py-2 pr-3">${matched}</td>
+          <td class="py-2 pr-3">${fmtTime(c.created_at)}</td>
+        </tr>
+      `;
+    }).join('') || `<tr><td colspan="4" class="py-6 text-center" style="color:var(--text-muted)">Nenhum clique capturado ainda.</td></tr>`;
   }
 
   function renderChannelLinks() {

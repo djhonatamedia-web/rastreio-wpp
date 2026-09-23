@@ -86,6 +86,34 @@ export async function onRequestGet(context) {
       LIMIT 20
     `).bind(client.id, from, to).all();
 
+    // Quebra por canal real de aquisição (Meta / Google Ads / Instagram /
+    // bio / GMB / etc, além de "organico") - complementa o funil acima,
+    // que só separa Meta (is_ctwa) do resto. `ad_platform` já vem
+    // resolvido por functions/webhook/_whatsapp-core.js (platformFor()).
+    const byChannel = await env.DB.prepare(`
+      SELECT
+        CASE WHEN is_ctwa = 1 THEN 'meta' ELSE COALESCE(ad_platform, 'organico') END as channel,
+        COUNT(*) as leads,
+        SUM(CASE WHEN status IN ('qualified','scheduled','sale') THEN 1 ELSE 0 END) as qualified,
+        SUM(CASE WHEN status IN ('scheduled','sale') THEN 1 ELSE 0 END) as scheduled,
+        SUM(CASE WHEN status = 'sale' THEN 1 ELSE 0 END) as sale
+      FROM whatsapp_contacts
+      WHERE client_id = ? AND created_at >= ? AND created_at <= ?
+      GROUP BY channel
+      ORDER BY leads DESC
+    `).bind(client.id, from, to).all();
+
+    // Saúde do rastreio: quantos cliques capturados (ad_click_codes)
+    // realmente viraram uma conversa (matched_wa_id). Uma taxa baixa é o
+    // sinal de que a ponte LP -> WhatsApp quebrou silenciosamente - foi
+    // assim que dois bugs reais (href com target=_blank, coluna `channel`
+    // faltando) passaram despercebidos por dias em 2026-09.
+    const clickHealthRow = await env.DB.prepare(`
+      SELECT COUNT(*) as total, SUM(CASE WHEN matched_wa_id IS NOT NULL THEN 1 ELSE 0 END) as matched
+      FROM ad_click_codes
+      WHERE client_id = ? AND created_at >= ? AND created_at <= ?
+    `).bind(client.id, from, to).first();
+
     const timeseries = buildTimeseries(leadsPerDay.results || [], stagesPerDay.results || []);
 
     return json({
@@ -95,6 +123,8 @@ export async function onRequestGet(context) {
       },
       timeseries,
       by_ad: byAd.results || [],
+      by_channel: byChannel.results || [],
+      click_health: { total: clickHealthRow?.total || 0, matched: clickHealthRow?.matched || 0 },
     });
   } catch (err) {
     return json({ error: err.message }, 500);
