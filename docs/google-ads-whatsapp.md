@@ -116,14 +116,18 @@ A única coisa que muda de cliente pra cliente é o `client: '<slug-do-cliente>'
 
 ## Configuração por cliente (não é código)
 
-- **Sem Developer Token.** O Google encerrou o token de desenvolvedor em
-  2026-09-09: o cabeçalho é opcional e ignorado pela API. O nível de
-  acesso agora é do **projeto Google Cloud** que emitiu as credenciais
-  OAuth (Cloud Console → Google Ads API → Visão geral → Níveis de
-  acesso). O nível "Explorador" (aprovação automática) já libera contas de
-  produção com 2.880 operações/dia — de sobra pra conversões de WhatsApp.
-  O código ainda manda `GOOGLE_ADS_DEVELOPER_TOKEN` se a variável existir,
-  mas não exige mais.
+- **Data Manager API, sem Developer Token.** Pra integração nova o Google
+  não libera mais o `uploadClickConversions` da Google Ads API (responde
+  "New integrations for uploading click conversions should use the Data
+  Manager API"), e o token de desenvolvedor foi encerrado em 2026-09-09.
+  O envio vai por `POST datamanager.googleapis.com/v1/events:ingest`
+  (ver `functions/_shared/google-ads-capi.js`). O nível de acesso é do
+  projeto Google Cloud (nível "Explorador", aprovação automática, já
+  libera contas de produção).
+- **Ative a "Data Manager API"** no projeto Cloud (Biblioteca → Data
+  Manager API → Ativar) e gere o Refresh Token com o scope
+  `https://www.googleapis.com/auth/datamanager`. Um token gerado só com
+  `.../auth/adwords` NÃO funciona nessa API.
 - OAuth Client ID/Secret + Refresh Token (`GOOGLE_ADS_CLIENT_ID`,
   `GOOGLE_ADS_CLIENT_SECRET`, `GOOGLE_ADS_REFRESH_TOKEN`) e, no dashboard,
   `GOOGLE_ADS_CUSTOMER_ID` / `GOOGLE_ADS_LOGIN_CUSTOMER_ID` (o MCC, quando
@@ -148,8 +152,8 @@ A única coisa que muda de cliente pra cliente é o `client: '<slug-do-cliente>'
 
 ## Ativação — Margel (2026-09)
 
-1. Projeto Google Cloud com a Google Ads API ativada e nível de acesso
-   "Explorador" aprovado (sem Developer Token — ver acima).
+1. Projeto Google Cloud com a **Data Manager API** ativada (e a Google Ads
+   API, se for usar outros recursos). Sem Developer Token — ver acima.
 2. OAuth Client ID/Secret + Refresh Token → Cloudflare Pages, como env
    vars prefixadas: `MARGEL_GOOGLE_ADS_CLIENT_ID`,
    `MARGEL_GOOGLE_ADS_CLIENT_SECRET`, `MARGEL_GOOGLE_ADS_REFRESH_TOKEN`

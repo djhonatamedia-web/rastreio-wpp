@@ -53,7 +53,7 @@ Cada linha de cada tabela pertence a um `client_id` — ver
 | `functions/webhook/whatsapp/[slug].js` | Adapter — resolve cliente pelo webhook_slug, delega pro core |
 | `functions/webhook/_whatsapp-core.js` | Parsing do payload uazapi, upsert de contato, atribuição |
 | `functions/webhook/_whatsapp-capi.js` | Envia evento `business_messaging` pra Meta |
-| `functions/_shared/google-ads-capi.js` | Envia conversão pro Google Ads (`uploadClickConversions`) |
+| `functions/_shared/google-ads-capi.js` | Envia conversão pro Google Ads (Data Manager API, `events:ingest`) |
 | `functions/_shared/stage-transition.js` | `applyStageTransition()` — único caminho pra mudar estágio |
 | `functions/_shared/text-normalize.js` | `normalize()` — usado no match de palavra-chave |
 | `functions/_shared/client-config.js` | IDs não-secretos por cliente, fallback D1 → env var |

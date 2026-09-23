@@ -1,31 +1,36 @@
-// Google Ads API (REST) - uploadClickConversions, ported from
-// krob-tracking-stack-main/functions/webhook/_core.js (sendToGoogleAds),
-// generalized for a per-funnel-stage conversion instead of a per-product
-// Purchase.
+// Google Ads offline click conversions, sent through the DATA MANAGER API
+// (POST https://datamanager.googleapis.com/v1/events:ingest).
 //
-// Multi-tenant: each client has their own Google Ads account/MCC and their
-// own OAuth app in most cases (see functions/_shared/clients.js -
-// getClientSecret), so the OAuth token cache below is keyed per client.id,
-// not a single module-level token like the original krob version.
+// Ported from krob-tracking-stack-main/functions/webhook/_core.js
+// (sendToGoogleAds), generalized for a per-funnel-stage conversion instead
+// of a per-product Purchase.
 //
-// Pinning a version in the URL: the Google Ads SDKs lag the REST API and
-// break with "API version not found" - call REST directly, same as krob.
+// *** WHY NOT THE GOOGLE ADS API (uploadClickConversions) *** Confirmed on
+// the first real send (Margel, 2026-09-23): Google answers HTTP 200 with a
+// partialFailureError saying "New integrations for uploading click
+// conversions should use the Data Manager API. Usage of
+// ConversionUploadService.UploadClickConversions is limited to existing
+// users." (An earlier 404 on the same call was a separate cause: API v21
+// had been sunset - v19-v21 answer 404, v22+ answer 401.) Do not go back to
+// the Google Ads API for this.
 //
-// *** THE VERSION EXPIRES *** Google sunsets each API version roughly a year
-// after release, and a sunset version answers a bare 404 - not a JSON error,
-// so the dashboard shows no readable reason. This is what silently broke the
-// first real Google Ads send (Margel, 2026-09-23): v21 was gone (v19-v21
-// answer 404, v22+ answer 401). Credentials, token and ids were all fine;
-// they were never even evaluated. When a Google Ads send fails with an
-// empty-bodied 404, check this first:
-//   for v in v22 v23 v24 v25 v26; do curl -s -o /dev/null -w "$v %{http_code}\n" \
-//     -X POST "https://googleads.googleapis.com/$v/customers/1:uploadClickConversions" \
-//     -H 'Content-Type: application/json' -d '{}'; done
-// (401 = version alive, 404 = sunset), then bump the constant below.
+// Data Manager API differences worth knowing:
+//  - OAuth scope must be https://www.googleapis.com/auth/datamanager (a
+//    refresh token minted for the old .../auth/adwords scope does NOT work),
+//    and the API must be enabled in the Cloud project.
+//  - No developer token, and no login-customer-id header: the login account
+//    goes in the request body (destinations[].loginAccount).
+//  - Fast-fail model: any invalid field rejects the whole request with an
+//    HTTP 4xx + { error: { message } }; there is no per-row partial failure.
+//
+// Multi-tenant: each client has their own Google Ads account/MCC, so the
+// OAuth token cache below is keyed per client.id (see
+// functions/_shared/clients.js - getClientSecret).
+
 import { getConfigValues } from './client-config.js';
 import { getClientSecret } from './clients.js';
 
-const GOOGLE_ADS_API_VERSION = 'v23';
+const DATA_MANAGER_INGEST_URL = 'https://datamanager.googleapis.com/v1/events:ingest';
 
 const googleAdsTokenCache = new Map(); // clientId -> { token, expiresAt }
 
@@ -69,37 +74,11 @@ async function getGoogleAdsAccessToken(env, client) {
   return data.access_token;
 }
 
-// Format unix seconds -> "YYYY-MM-DD HH:MM:SS+-HH:MM" in the account's
-// timezone. Google Ads rejects conversions whose timestamp precedes the
-// click with CONVERSION_PRECEDES_GCLID, so the offset must match the ad
-// account's TZ. Default matches krob's default (-03:00, Sao Paulo).
-function formatConversionDateTime(unixSeconds, offsetString) {
-  const tz = offsetString || '-03:00';
-  const match = /^([+-])(\d{2}):(\d{2})$/.exec(tz);
-  if (!match) {
-    const d = new Date(unixSeconds * 1000);
-    const pad = n => String(n).padStart(2, '0');
-    return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ` +
-      `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}+00:00`;
-  }
-  const sign = match[1] === '-' ? -1 : 1;
-  const offsetSeconds = sign * (parseInt(match[2], 10) * 3600 + parseInt(match[3], 10) * 60);
-  const shifted = new Date((unixSeconds + offsetSeconds) * 1000);
-  const pad = n => String(n).padStart(2, '0');
-  return `${shifted.getUTCFullYear()}-${pad(shifted.getUTCMonth() + 1)}-${pad(shifted.getUTCDate())} ` +
-    `${pad(shifted.getUTCHours())}:${pad(shifted.getUTCMinutes())}:${pad(shifted.getUTCSeconds())}${tz}`;
-}
-
 // conversionActionId: numeric Google Ads Conversion Action id (client- and
 // stage-specific, read from D1/env by the caller - see
 // STAGE_TO_GOOGLE_ADS_ENV_VAR in config/whatsapp.js).
 export async function sendGoogleAdsConversion({ conversionActionId, gclid, gbraid, wbraid, value, currency, eventTime, env, client }) {
   // OAuth credentials are real secrets, Cloudflare-env-only, per client.
-  // The developer token is optional: Google sunset it on 2026-09-09 (API
-  // access levels now belong to the Cloud project that issued the OAuth
-  // credentials, and the header is ignored by the API servers). It's still
-  // sent below when a client happens to have one configured.
-  const developerToken = getClientSecret(env, client, 'GOOGLE_ADS_DEVELOPER_TOKEN');
   const oauthClientId = getClientSecret(env, client, 'GOOGLE_ADS_CLIENT_ID');
   const oauthClientSecret = getClientSecret(env, client, 'GOOGLE_ADS_CLIENT_SECRET');
   const refreshToken = getClientSecret(env, client, 'GOOGLE_ADS_REFRESH_TOKEN');
@@ -131,30 +110,29 @@ export async function sendGoogleAdsConversion({ conversionActionId, gclid, gbrai
   const customerId = String(GOOGLE_ADS_CUSTOMER_ID).replace(/-/g, '');
   const loginCustomerId = String(GOOGLE_ADS_LOGIN_CUSTOMER_ID).replace(/-/g, '');
 
-  const conversion = {
-    conversionAction: `customers/${customerId}/conversionActions/${conversionActionId}`,
-    conversionDateTime: formatConversionDateTime(eventTime, getClientSecret(env, client, 'TIMEZONE_OFFSET')),
-    conversionValue: parseFloat(value) || 0,
-    currencyCode: currency || 'BRL',
+  // RFC 3339 in UTC (unambiguous, so no per-account timezone offset needed).
+  const adIdentifiers = gclid ? { gclid } : wbraid ? { wbraid } : { gbraid };
+  const body = {
+    destinations: [{
+      operatingAccount: { accountType: 'GOOGLE_ADS', accountId: customerId },
+      loginAccount: { accountType: 'GOOGLE_ADS', accountId: loginCustomerId },
+      productDestinationId: String(conversionActionId),
+    }],
+    events: [{
+      eventTimestamp: new Date(eventTime * 1000).toISOString(),
+      conversionValue: parseFloat(value) || 0,
+      currency: currency || 'BRL',
+      adIdentifiers,
+    }],
+    validateOnly: false,
   };
-  if (gclid) conversion.gclid = gclid;
-  else if (wbraid) conversion.wbraid = wbraid;
-  else if (gbraid) conversion.gbraid = gbraid;
-
-  const body = { conversions: [conversion], partialFailure: true, validateOnly: false };
   const payloadJson = JSON.stringify(body);
 
-  const headers = {
-    'Authorization': `Bearer ${accessToken}`,
-    'login-customer-id': loginCustomerId,
-    'Content-Type': 'application/json',
-  };
-  if (developerToken) headers['developer-token'] = developerToken;
-
-  const response = await fetch(
-    `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}/customers/${customerId}:uploadClickConversions`,
-    { method: 'POST', headers, body: payloadJson }
-  );
+  const response = await fetch(DATA_MANAGER_INGEST_URL, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: payloadJson,
+  });
 
   return { payload: payloadJson, response };
 }
