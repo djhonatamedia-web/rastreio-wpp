@@ -124,7 +124,10 @@ export async function onRequestGet(context) {
         // failed send is never shown as a silent blank (see the note at the
         // top of functions/_shared/google-ads-capi.js).
         google_ads_error: row.google_ads_response_ok !== 1 && row.google_ads_status_code
-          ? (extractApiError(row.google_ads_response_body) || `HTTP ${row.google_ads_status_code} sem detalhe (versão da API do Google pode ter sido desativada)`)
+          ? (extractApiError(row.google_ads_response_body)
+              || (row.google_ads_status_code === 404
+                ? 'HTTP 404 sem detalhe (a versão da API do Google pode ter sido desativada)'
+                : `HTTP ${row.google_ads_status_code} sem detalhe legível`))
           : null,
       });
     }
@@ -174,7 +177,15 @@ function extractApiError(responseBody) {
   }
   if (parsed?.error?.error_user_msg) return parsed.error.error_user_msg;
   if (parsed?.error?.message) return parsed.error.message;
-  if (parsed?.partialFailureError?.errors?.[0]?.message) return parsed.partialFailureError.errors[0].message;
+  // Google Ads partial failure is a google.rpc.Status: the specific reason
+  // (e.g. the click id is too old, or the conversion action can't take
+  // uploads yet) lives in details[].errors[], the top-level .message is only
+  // a generic summary - prefer the specific one.
+  const pfe = parsed?.partialFailureError;
+  const detail = (pfe?.details || []).flatMap(d => d?.errors || [])[0];
+  if (detail?.message) return detail.message;
+  if (pfe?.errors?.[0]?.message) return pfe.errors[0].message;
+  if (pfe?.message) return pfe.message;
   return null;
 }
 
