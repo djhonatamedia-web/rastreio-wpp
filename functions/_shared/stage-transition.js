@@ -16,6 +16,7 @@
 // breaks if a contact somehow ends up with both.
 
 import { sendWhatsAppEventToMeta } from '../webhook/_whatsapp-capi.js';
+import { sendMetaWebEvent, hasMetaSiteId } from '../webhook/_meta-web-capi.js';
 import { sendGoogleAdsConversion } from './google-ads-capi.js';
 import { getConfigValue } from './client-config.js';
 import { STAGE_TO_META_EVENT, STAGE_TO_GOOGLE_ADS_ENV_VAR } from '../../config/whatsapp.js';
@@ -23,7 +24,7 @@ import { STAGE_TO_META_EVENT, STAGE_TO_GOOGLE_ADS_ENV_VAR } from '../../config/w
 // source: 'manual' (dashboard button) | 'keyword' (trigger phrase match)
 export async function applyStageTransition({ env, client, waId, newStatus, source, value, currency }) {
   const contact = await env.DB
-    .prepare('SELECT wa_id, phone, ctwa_clid, gclid, gbraid, wbraid FROM whatsapp_contacts WHERE client_id = ? AND wa_id = ?')
+    .prepare('SELECT wa_id, phone, ctwa_clid, gclid, gbraid, wbraid, fbc, fbp, client_ip, client_user_agent, landing_url FROM whatsapp_contacts WHERE client_id = ? AND wa_id = ?')
     .bind(client.id, waId)
     .first();
   if (!contact) {
@@ -70,7 +71,13 @@ export async function applyStageTransition({ env, client, waId, newStatus, sourc
 // repeated keyword match) sent duplicate CAPI events for the same contact,
 // inflating Meta's event count past the real number of leads.
 async function sendMetaIfNeeded({ env, client, waId, contact, metaEventName, value, currency, eventId, now }) {
-  if (!contact.ctwa_clid) {
+  // Two ways a lead can be tied back to an ad, tried in this order:
+  //  - ctwa_clid  -> Click-to-WhatsApp (messaging dataset, business_messaging)
+  //  - fbc / fbp  -> landing page -> WhatsApp (web Pixel, action_source website)
+  // See functions/webhook/_meta-web-capi.js for why the second exists.
+  const viaCtwa = !!contact.ctwa_clid;
+  const viaSite = !viaCtwa && hasMetaSiteId(contact);
+  if (!viaCtwa && !viaSite) {
     return { attempted: false, summary: 'skipped: no ctwa_clid', statusCode: null, responseOk: null, responseBody: null, payloadSent: null };
   }
 
@@ -83,10 +90,19 @@ async function sendMetaIfNeeded({ env, client, waId, contact, metaEventName, val
   }
 
   const customData = value != null ? { value: parseFloat(value) || 0, currency: currency || 'BRL' } : undefined;
-  const { payload, response, skipped } = await sendWhatsAppEventToMeta({
-    eventName: metaEventName, ctwaClid: contact.ctwa_clid, phone: contact.phone,
-    eventId, eventTime: now, customData, env, client,
-  });
+  const { payload, response, skipped } = viaCtwa
+    ? await sendWhatsAppEventToMeta({
+      eventName: metaEventName, ctwaClid: contact.ctwa_clid, phone: contact.phone,
+      eventId, eventTime: now, customData, env, client,
+    })
+    : await sendMetaWebEvent({
+      eventName: metaEventName,
+      contact: {
+        fbc: contact.fbc, fbp: contact.fbp, phone: contact.phone, waId,
+        clientIp: contact.client_ip, clientUserAgent: contact.client_user_agent, landingUrl: contact.landing_url,
+      },
+      eventId, eventTime: now, customData, env, client,
+    });
 
   if (skipped) {
     return { attempted: false, summary: `skipped: ${skipped}`, statusCode: null, responseOk: null, responseBody: null, payloadSent: null };

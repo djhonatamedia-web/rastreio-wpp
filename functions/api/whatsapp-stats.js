@@ -114,6 +114,18 @@ export async function onRequestGet(context) {
       WHERE client_id = ? AND created_at >= ? AND created_at <= ?
     `).bind(client.id, from, to).first();
 
+    // Of the leads that came from a Meta ad (Click-to-WhatsApp OR landing
+    // page), how many carry an id Meta can match a conversion back to
+    // (ctwa_clid or fbc/fbp). The rest show up in the dashboard but their
+    // funnel events can't be returned to the ad - see docs.
+    const metaCoverageRow = await env.DB.prepare(`
+      SELECT
+        COUNT(*) as total,
+        SUM(CASE WHEN ctwa_clid IS NOT NULL OR fbc IS NOT NULL THEN 1 ELSE 0 END) as with_id
+      FROM whatsapp_contacts
+      WHERE client_id = ? AND (is_ctwa = 1 OR ad_platform = 'meta_site') AND created_at >= ? AND created_at <= ?
+    `).bind(client.id, from, to).first();
+
     const timeseries = buildTimeseries(leadsPerDay.results || [], stagesPerDay.results || []);
 
     return json({
@@ -125,6 +137,7 @@ export async function onRequestGet(context) {
       by_ad: byAd.results || [],
       by_channel: byChannel.results || [],
       click_health: { total: clickHealthRow?.total || 0, matched: clickHealthRow?.matched || 0 },
+      meta_coverage: { total: metaCoverageRow?.total || 0, with_id: metaCoverageRow?.with_id || 0 },
     });
   } catch (err) {
     return json({ error: err.message }, 500);

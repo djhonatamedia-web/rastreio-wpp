@@ -28,15 +28,15 @@ export async function onRequestPost(context) {
     return json({ error: 'invalid JSON body' }, 400);
   }
 
-  const { client: clientSlug, code, gclid, gbraid, wbraid, utm_source, utm_medium, utm_campaign, utm_content, utm_term, landing_url } = body;
+  const { client: clientSlug, code, gclid, gbraid, wbraid, fbclid, fbc, fbp, utm_source, utm_medium, utm_campaign, utm_content, utm_term, landing_url } = body;
   if (!code) {
     return json({ error: 'code is required' }, 400);
   }
-  // Google Ads click id OR any UTM field - a click with neither carries no
-  // attribution signal at all, so there'd be nothing to bridge to the
-  // WhatsApp message. UTM-only clicks (Instagram, email, etc. - no ad
-  // click id) are valid: see docs/google-ads-whatsapp.md.
-  const hasAttribution = gclid || gbraid || wbraid || utm_source || utm_medium || utm_campaign || utm_content || utm_term;
+  // Google Ads click id, Meta click/browser ids, OR any UTM field - a click
+  // with none of these carries no attribution signal at all, so there'd be
+  // nothing to bridge to the WhatsApp message. UTM-only clicks (Instagram,
+  // email, etc.) are valid: see docs/google-ads-whatsapp.md.
+  const hasAttribution = gclid || gbraid || wbraid || fbclid || fbc || fbp || utm_source || utm_medium || utm_campaign || utm_content || utm_term;
   if (!hasAttribution) {
     return json({ error: 'ao menos um identificador (gclid/gbraid/wbraid) ou campo utm_* e obrigatorio' }, 400);
   }
@@ -50,17 +50,26 @@ export async function onRequestPost(context) {
   // Uppercased so case never matters when the webhook matches it back
   // against the WhatsApp message text.
   const normalizedCode = String(code).toUpperCase();
+  // IP and User-Agent are taken from the request headers, never the body:
+  // the lead's own browser makes this call, so they are the real visitor's,
+  // and Meta requires both for action_source "website" events.
+  const clientIp = request.headers.get('CF-Connecting-IP') || null;
+  const clientUa = (request.headers.get('User-Agent') || '').slice(0, 500) || null;
+  // No _fbc cookie (Pixel not on the page yet) but a fbclid in the URL: Meta's
+  // documented format is fb.<subdomainIndex>.<clickTimeMs>.<fbclid>.
+  const fbcValue = fbc || (fbclid ? `fb.1.${now * 1000}.${fbclid}` : null);
+
   await env.DB
     .prepare(`
       INSERT OR REPLACE INTO ad_click_codes (
         client_id, code, gclid, gbraid, wbraid, utm_source, utm_medium, utm_campaign, utm_content, utm_term,
-        landing_url, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        landing_url, fbclid, fbc, fbp, client_ip, client_user_agent, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
     .bind(
       client.id, normalizedCode, gclid || null, gbraid || null, wbraid || null,
       utm_source || null, utm_medium || null, utm_campaign || null, utm_content || null, utm_term || null,
-      landing_url || null, now
+      landing_url || null, fbclid || null, fbcValue, fbp || null, clientIp, clientUa, now
     )
     .run();
 

@@ -53,6 +53,7 @@
 // -----------------------------------------------------------------------------
 
 import { sendWhatsAppEventToMeta } from './_whatsapp-capi.js';
+import { sendMetaWebEvent, hasMetaSiteId } from './_meta-web-capi.js';
 import { applyStageTransition } from '../_shared/stage-transition.js';
 import { normalize } from '../_shared/text-normalize.js';
 
@@ -138,11 +139,15 @@ export async function processWhatsAppMessage({ raw, env, context, client }) {
 
     // Same ordering-quirk handling, for Google Ads / fixed-channel
     // attribution: the "Ref: <code>" text can land on a later message than
-    // the one that created the contact. No CAPI send here (see file
-    // header) - just backfill.
+    // the one that created the contact. Google Ads / channel codes send no
+    // first-touch CAPI (see file header); a Meta landing-page click does
+    // (the 'Lead' event), same as it would have on the first message.
     if (!existing.gclid && !existing.gbraid && !existing.wbraid && !existing.ad_platform && extracted.googleAdsCode) {
-      await backfillClickAttribution({ env, client, waId: extracted.waId, code: extracted.googleAdsCode, now });
-      return { ok: true, contact: 'existing', waId: extracted.waId, capi: 'backfilled click/channel attribution' };
+      const click = await backfillClickAttribution({ env, client, waId: extracted.waId, code: extracted.googleAdsCode, now });
+      const capi = click && hasMetaSiteId(click)
+        ? await sendFirstTouchLead({ extracted, click, eventId, now, env, context, client })
+        : 'backfilled click/channel attribution';
+      return { ok: true, contact: 'existing', waId: extracted.waId, capi };
     }
 
     return { ok: true, contact: 'existing', waId: extracted.waId };
@@ -165,8 +170,9 @@ export async function processWhatsAppMessage({ raw, env, context, client }) {
         ad_source_url, ad_media_type, ad_thumbnail_url, is_ctwa,
         gclid, gbraid, wbraid, ad_platform,
         utm_source, utm_medium, utm_campaign, utm_content, utm_term,
+        fbc, fbp, client_ip, client_user_agent, landing_url,
         first_message_text, first_message_at, status, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'lead', ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'lead', ?, ?)
     `)
     .bind(
       client.id,
@@ -189,6 +195,11 @@ export async function processWhatsAppMessage({ raw, env, context, client }) {
       click?.utm_campaign || null,
       click?.utm_content || null,
       click?.utm_term || null,
+      click?.fbc || null,
+      click?.fbp || null,
+      click?.client_ip || null,
+      click?.client_user_agent || null,
+      click?.landing_url || null,
       extracted.text || null,
       extracted.timestamp || now,
       now,
@@ -200,7 +211,7 @@ export async function processWhatsAppMessage({ raw, env, context, client }) {
     context.waitUntil(markClickCodeMatched({ env, client, code: extracted.googleAdsCode, waId: extracted.waId, now }));
   }
 
-  const capi = await sendFirstTouchLead({ extracted, eventId, now, env, context, client });
+  const capi = await sendFirstTouchLead({ extracted, click, eventId, now, env, context, client });
   return { ok: true, contact: 'created', waId: extracted.waId, capi };
 }
 
@@ -211,7 +222,7 @@ export async function processWhatsAppMessage({ raw, env, context, client }) {
 // code never made it in - see docs/google-ads-whatsapp.md).
 async function lookupClickCode({ env, client, code }) {
   const row = await env.DB
-    .prepare('SELECT gclid, gbraid, wbraid, channel, utm_source, utm_medium, utm_campaign, utm_content, utm_term FROM ad_click_codes WHERE client_id = ? AND code = ?')
+    .prepare('SELECT gclid, gbraid, wbraid, channel, utm_source, utm_medium, utm_campaign, utm_content, utm_term, fbclid, fbc, fbp, client_ip, client_user_agent, landing_url FROM ad_click_codes WHERE client_id = ? AND code = ?')
     .bind(client.id, code)
     .first();
   return row || null;
@@ -227,6 +238,9 @@ function platformFor(click) {
   if (!click) return null;
   if (click.gclid || click.gbraid || click.wbraid) return 'google';
   if (click.channel) return click.channel;
+  // Meta browser ids (fbclid/fbc/fbp) mean a paid-or-organic Meta visit that
+  // came through a landing page (no ctwa_clid) - see _meta-web-capi.js.
+  if (hasMetaSiteId(click)) return 'meta_site';
   return click.utm_source ? click.utm_source.toLowerCase() : null;
 }
 
@@ -241,24 +255,27 @@ async function markClickCodeMatched({ env, client, code, waId, now }) {
 // pattern as the ctwa_clid backfill above.
 async function backfillClickAttribution({ env, client, waId, code, now }) {
   const click = await lookupClickCode({ env, client, code });
-  if (!click) return;
+  if (!click) return null;
 
   await env.DB
     .prepare(`
       UPDATE whatsapp_contacts SET
         gclid = ?, gbraid = ?, wbraid = ?, ad_platform = ?,
         utm_source = ?, utm_medium = ?, utm_campaign = ?, utm_content = ?, utm_term = ?,
+        fbc = ?, fbp = ?, client_ip = ?, client_user_agent = ?, landing_url = ?,
         updated_at = ?
       WHERE client_id = ? AND wa_id = ?
     `)
     .bind(
       click.gclid || null, click.gbraid || null, click.wbraid || null, platformFor(click),
       click.utm_source || null, click.utm_medium || null, click.utm_campaign || null, click.utm_content || null, click.utm_term || null,
+      click.fbc || null, click.fbp || null, click.client_ip || null, click.client_user_agent || null, click.landing_url || null,
       now, client.id, waId
     )
     .run();
 
   await markClickCodeMatched({ env, client, code, waId, now });
+  return click;
 }
 
 // Fires the automatic first-touch 'LeadSubmitted' CAPI event and logs the
@@ -266,21 +283,40 @@ async function backfillClickAttribution({ env, client, waId, code, now }) {
 // path (ad context can legitimately arrive on either message - see the
 // ordering quirk note at the top of this file). Returns a short status
 // string for the caller's response, doesn't throw.
-async function sendFirstTouchLead({ extracted, eventId, now, env, context, client }) {
-  if (!extracted.ctwaClid) {
+async function sendFirstTouchLead({ extracted, click, eventId, now, env, context, client }) {
+  let eventName, sent;
+  if (extracted.ctwaClid) {
+    // Click-to-WhatsApp: attributed by ctwa_clid to the messaging dataset.
+    eventName = 'LeadSubmitted'; // NOT 'Lead' -- Meta rejects that literal name for business_messaging (400, error_subcode 2804066), confirmed 2026-08 in production; Meta's own error suggested this alternative
+    sent = await sendWhatsAppEventToMeta({
+      eventName,
+      ctwaClid: extracted.ctwaClid,
+      phone: extracted.phone,
+      eventId,
+      eventTime: extracted.timestamp || now,
+      env,
+      client,
+    });
+  } else if (hasMetaSiteId(click)) {
+    // Landing page -> WhatsApp: attributed by fbc/fbp to the web Pixel. A
+    // normal website conversion, so the standard 'Lead' name is fine here.
+    eventName = 'Lead';
+    sent = await sendMetaWebEvent({
+      eventName,
+      contact: {
+        fbc: click.fbc, fbp: click.fbp, phone: extracted.phone, waId: extracted.waId,
+        clientIp: click.client_ip, clientUserAgent: click.client_user_agent, landingUrl: click.landing_url,
+      },
+      eventId,
+      eventTime: now,
+      env,
+      client,
+    });
+  } else {
     return 'skipped: no ctwa_clid';
   }
 
-  const { payload, response, skipped } = await sendWhatsAppEventToMeta({
-    eventName: 'LeadSubmitted', // NOT 'Lead' -- Meta rejects that literal name for business_messaging (400, error_subcode 2804066), confirmed 2026-08 in production; Meta's own error suggested this alternative
-    ctwaClid: extracted.ctwaClid,
-    phone: extracted.phone,
-    eventId,
-    eventTime: extracted.timestamp || now,
-    env,
-    client,
-  });
-
+  const { payload, response, skipped } = sent;
   if (skipped) {
     return `skipped: ${skipped}`;
   }
@@ -300,9 +336,9 @@ async function sendFirstTouchLead({ extracted, eventId, now, env, context, clien
       INSERT INTO whatsapp_events (
         client_id, wa_id, event_name, event_id, event_time, source, sent_to_meta,
         meta_status_code, meta_response_ok, meta_response_body, meta_payload_sent, created_at
-      ) VALUES (?, ?, 'LeadSubmitted', ?, ?, 'webhook', 1, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, 'webhook', 1, ?, ?, ?, ?, ?)
     `).bind(
-      client.id, extracted.waId, eventId, extracted.timestamp || now,
+      client.id, extracted.waId, eventName, eventId, extracted.timestamp || now,
       response.status, response.ok ? 1 : 0, responseBody, payload, now
     ).run()
   );

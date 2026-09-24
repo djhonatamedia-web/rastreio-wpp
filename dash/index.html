@@ -923,7 +923,7 @@
   });
 
   const STATUS_LABELS = { lead: 'Lead', qualified: 'Qualificado', scheduled: 'Agendado', sale: 'Venda', lost: 'Perdido' };
-  const AD_PLATFORM_LABELS = { google: 'Google Ads', bio: 'Link na Bio', gmb: 'Google Meu Negócio' };
+  const AD_PLATFORM_LABELS = { google: 'Google Ads', bio: 'Link na Bio', gmb: 'Google Meu Negócio', meta_site: 'Meta Ads (site)' };
   const STATUS_ICONS = { lead: 'users', qualified: 'check', scheduled: 'calendar', sale: 'dollar', lost: 'x' };
   let currentEventsRaw = [];
   let evolutionChart = null;
@@ -1027,31 +1027,46 @@
   // Cor de acordo com a fração de cliques capturados que viraram conversa
   // de verdade - uma taxa baixa é o sinal de que a ponte LP -> WhatsApp
   // quebrou silenciosamente (ver nota em functions/api/whatsapp-stats.js).
-  function renderClickHealth(health) {
+  function healthColor(total, pct) {
+    if (total >= 5 && pct < 15) return 'var(--stage-lost-text)'; // vermelho
+    if (pct < 50) return 'var(--chart-scheduled)'; // amarelo
+    return 'var(--chart-sale)'; // verde
+  }
+
+  // `coverage`: dos leads de anúncio Meta (Clique-para-WhatsApp ou landing
+  // page), quantos têm um id que o Meta consegue casar de volta (ctwa_clid
+  // ou fbc/fbp). Os outros aparecem aqui mas não devolvem conversão pro anúncio.
+  function renderClickHealth(health, coverage) {
     const el = document.getElementById('click-health');
     const total = health.total || 0;
     const matched = health.matched || 0;
-    if (!total) {
-      el.innerHTML = `
-        <div class="flex items-center justify-between">
-          <div class="font-semibold text-sm">Saúde do rastreio</div>
-          <div class="text-sm" style="color:var(--text-muted)">Nenhum clique capturado no período.</div>
-        </div>
-      `;
-      return;
-    }
-    const pct = Math.round((matched / total) * 100);
-    let color = 'var(--chart-sale)'; // verde
-    if (total >= 5 && pct < 15) color = 'var(--stage-lost-text)'; // vermelho
-    else if (pct < 50) color = 'var(--chart-scheduled)'; // amarelo
-    el.innerHTML = `
-      <div class="flex items-center justify-between flex-wrap gap-2">
-        <div class="font-semibold text-sm">Saúde do rastreio</div>
-        <div class="text-sm mono">
+    const cTotal = (coverage && coverage.total) || 0;
+    const cWith = (coverage && coverage.with_id) || 0;
+
+    const clicksLine = total
+      ? (() => {
+        const pct = Math.round((matched / total) * 100);
+        return `
           <span style="color:var(--text-muted)">Cliques capturados:</span> ${total}
           <span style="color:var(--text-muted)"> · Viraram conversa:</span> ${matched}
-          <span style="color:${color};font-weight:600"> (${pct}%)</span>
-        </div>
+          <span style="color:${healthColor(total, pct)};font-weight:600"> (${pct}%)</span>`;
+      })()
+      : `<span style="color:var(--text-muted)">Nenhum clique capturado no período.</span>`;
+
+    const coverageLine = cTotal
+      ? (() => {
+        const pct = Math.round((cWith / cTotal) * 100);
+        return `
+          <span style="color:var(--text-muted)">Leads de anúncio que podem voltar pro Meta:</span> ${cWith} de ${cTotal}
+          <span style="color:${healthColor(cTotal, pct)};font-weight:600"> (${pct}%)</span>`;
+      })()
+      : '';
+
+    el.innerHTML = `
+      <div class="font-semibold text-sm mb-2">Saúde do rastreio</div>
+      <div class="text-sm mono space-y-1">
+        <div>${clicksLine}</div>
+        ${coverageLine ? `<div>${coverageLine}</div>` : ''}
       </div>
     `;
   }
@@ -1082,7 +1097,7 @@
     renderEvolutionChart(data.timeseries || []);
     renderByAd(data.by_ad || []);
     renderByChannel(data.by_channel || []);
-    renderClickHealth(data.click_health || { total: 0, matched: 0 });
+    renderClickHealth(data.click_health || { total: 0, matched: 0 }, data.meta_coverage || { total: 0, with_id: 0 });
   }
 
   document.querySelectorAll('#range-selector button[data-days]').forEach(btn => {
@@ -1189,7 +1204,7 @@
           <span class="badge badge-${c.status}">${STATUS_LABELS[c.status] || c.status}</span>
           ${c.status_source === 'keyword' ? `<span class="text-[10px] ml-1" style="color:var(--text-muted)" title="Mudou sozinho por palavra-chave">🔤 frase</span>` : ''}
         </td>
-        <td class="py-2 pr-3">${c.is_ctwa ? `<div class="flex items-center gap-2">${c.ad_thumbnail_url ? `<img class="ad-thumb-sm" src="${escapeHtml(c.ad_thumbnail_url)}" alt="" onerror="this.style.display='none'">` : ''}<span title="${escapeHtml(c.ad_headline || '')}">${escapeHtml(c.ad_headline || 'CTWA')}</span></div>` : (c.ad_platform ? `<span class="badge badge-scheduled" title="${escapeHtml(c.gclid || '')}">${AD_PLATFORM_LABELS[c.ad_platform] || c.ad_platform}</span>` : '—')}</td>
+        <td class="py-2 pr-3">${c.is_ctwa ? `<div class="flex items-center gap-2">${c.ad_thumbnail_url ? `<img class="ad-thumb-sm" src="${escapeHtml(c.ad_thumbnail_url)}" alt="" onerror="this.style.display='none'">` : ''}<span title="${escapeHtml(c.ad_headline || '')}">${escapeHtml(c.ad_headline || 'CTWA')}</span>${c.ctwa_clid ? '' : `<span class="text-[10px]" style="color:var(--text-muted)" title="O WhatsApp não entregou o ctwa_clid: este lead aparece aqui mas não volta pro Meta">sem clid</span>`}</div>` : (c.ad_platform ? `<span class="badge badge-scheduled" title="${escapeHtml(c.gclid || '')}">${AD_PLATFORM_LABELS[c.ad_platform] || c.ad_platform}</span>` : '—')}</td>
         <td class="py-2 pr-3 max-w-xs truncate" title="${escapeHtml(c.first_message_text || '')}">${escapeHtml(c.first_message_text || '—')}</td>
         <td class="py-2 pr-3">${fmtTime(c.first_message_at)}</td>
         <td class="py-2 pr-3 whitespace-nowrap">
@@ -1345,8 +1360,9 @@
   }
 
   const CONFIG_FIELDS = [
-    { key: 'META_PIXEL_ID', label: 'Meta Pixel ID', group: 'meta' },
+    { key: 'META_PIXEL_ID', label: 'Meta Pixel ID (conjunto de mensagens do WhatsApp)', group: 'meta' },
     { key: 'META_PAGE_ID', label: 'Meta Page ID', group: 'meta' },
+    { key: 'META_WEB_PIXEL_ID', label: 'Meta Pixel ID do site / landing page', group: 'meta' },
     { key: 'GOOGLE_ADS_CUSTOMER_ID', label: 'Google Ads Customer ID', group: 'google' },
     { key: 'GOOGLE_ADS_LOGIN_CUSTOMER_ID', label: 'Google Ads Login Customer ID (MCC)', group: 'google' },
     { key: 'GOOGLE_ADS_CONVERSION_ACTION_QUALIFIED', label: 'Conversion Action — Qualificado', group: 'google' },
@@ -1837,6 +1853,14 @@
       `);
       if (contact.ad_source_url) {
         rows.push(`<a class="text-xs" style="color:var(--accent)" href="${escapeHtml(contact.ad_source_url)}" target="_blank" rel="noopener">Ver o anúncio ↗</a>`);
+      }
+    } else if (contact.ad_platform === 'meta_site') {
+      rows.push(`<div class="text-sm font-medium">Meta Ads (site)</div>`);
+      const siteUtmLine = utmDetailLine(contact, ['utm_campaign', 'utm_content', 'utm_term', 'utm_medium']);
+      if (siteUtmLine) rows.push(siteUtmLine);
+      // Sem fbc/fbp nenhum evento deste lead consegue ser atribuído no Meta.
+      if (!contact.fbc) {
+        rows.push(errorLine('Sem fbc: nenhum evento deste lead será atribuído no Meta.'));
       }
     } else if (contact.ad_platform === 'google') {
       rows.push(`<div class="text-sm">Google Ads <span class="text-xs mono" style="color:var(--text-muted)">${escapeHtml(contact.gclid || contact.gbraid || contact.wbraid || '')}</span></div>`);

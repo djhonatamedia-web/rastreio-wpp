@@ -48,6 +48,7 @@ export async function onRequestGet(context) {
         ad_source_url, ad_media_type, ad_thumbnail_url, is_ctwa, ad_platform,
         gclid, gbraid, wbraid,
         utm_source, utm_medium, utm_campaign, utm_content, utm_term,
+        fbc, fbp, landing_url,
         first_message_text,
         first_message_at, status, status_source, status_updated_at,
         lead_sent_to_meta, lead_meta_status_code, lead_meta_response_ok,

@@ -78,7 +78,18 @@ abrir.
     var gclid = rawParam('gclid'), gbraid = rawParam('gbraid'), wbraid = rawParam('wbraid');
     var utmSource = rawParam('utm_source'), utmMedium = rawParam('utm_medium'),
         utmCampaign = rawParam('utm_campaign'), utmContent = rawParam('utm_content'), utmTerm = rawParam('utm_term');
-    if (!gclid && !gbraid && !wbraid && !utmSource) return; // sem nenhum sinal de origem, deixa o link como está
+
+    // Meta: fbclid da URL + cookies do Pixel. Sem o cookie _fbc (Pixel ainda
+    // não rodou), monta no formato oficial fb.1.<ms>.<fbclid>.
+    function cookie(name) {
+      var m = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
+      return m ? decodeURIComponent(m[1]) : '';
+    }
+    var fbclid = rawParam('fbclid'), fbp = cookie('_fbp'), fbc = cookie('_fbc');
+    if (!fbc && fbclid) fbc = 'fb.1.' + Date.now() + '.' + fbclid;
+
+    // fbp sozinho NÃO conta como sinal: o Pixel cria pra todo visitante.
+    if (!gclid && !gbraid && !wbraid && !fbc && !utmSource) return; // sem nenhum sinal de origem, deixa o link como está
 
     var code = Array.from({ length: 6 }, function () {
       return 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'[Math.floor(Math.random() * 36)];
@@ -90,6 +101,7 @@ abrir.
       body: JSON.stringify({
         client: '<slug-do-cliente>', // mesmo slug da aba "Clientes" do dashboard
         code: code, gclid: gclid, gbraid: gbraid, wbraid: wbraid,
+        fbclid: fbclid, fbc: fbc, fbp: fbp,
         utm_source: utmSource, utm_medium: utmMedium, utm_campaign: utmCampaign,
         utm_content: utmContent, utm_term: utmTerm, landing_url: location.href,
       }),
@@ -186,6 +198,52 @@ completos ficam salvos no contato, visíveis no painel "Origem" do
 dashboard. Assim como bio/GMB, **não gera envio de conversão** pra
 nenhuma plataforma de anúncio — é atribuição só de dashboard, já que não
 existe um `gclid` de verdade pra reportar de volta.
+
+## Meta Ads pela landing page (sem `ctwaClid`)
+
+Alternativa (ou complemento) ao anúncio Clique-para-WhatsApp, pra quando o
+WhatsApp não entrega o `ctwaClid` (confirmado 2026-09-23/24: falta em
+~metade dos leads de anúncio da Margel e no primeiro da Vanessa). Aqui o
+anúncio leva pra uma **landing page**, e a atribuição é nossa:
+
+```
+anúncio Meta → LP (Pixel + GTM) → clique no botão do WhatsApp
+   → script captura fbclid/_fbc/_fbp + UTMs, gera "Ref: <código>"
+   → POST /api/track-click (o servidor grava IP e User-Agent reais)
+   → lead manda a mensagem → webhook casa o código
+   → cada estágio volta ao Meta por CAPI "website" (fbc/fbp + telefone com hash)
+```
+
+O contato fica com `ad_platform = 'meta_site'` (rótulo "Meta Ads (site)") e
+os eventos `Lead`, `QualifiedLead`, `Schedule`, `Purchase` vão pro **Pixel
+do site** (`META_WEB_PIXEL_ID`), não pro conjunto de mensagens. Código:
+`functions/webhook/_meta-web-capi.js`; escolha do caminho em
+`functions/_shared/stage-transition.js` (`ctwa_clid` → mensagens; senão
+`fbc` → site).
+
+**Parâmetros de URL do anúncio** (Gerenciador → anúncio → Rastreamento →
+"Parâmetros de URL"), pra ter campanha/anúncio/conjunto por lead:
+
+```
+utm_source=facebook&utm_medium=paid&utm_campaign={{campaign.name}}&utm_content={{ad.name}}&utm_term={{adset.name}}
+```
+
+**Configuração por cliente:**
+1. Rodar `migrations/0009_meta_site_attribution.sql` no D1 (uma linha por vez).
+2. Dashboard → Configurações: `META_WEB_PIXEL_ID` = Pixel da landing page.
+3. Token: se o `META_ACCESS_TOKEN` do cliente não enxergar esse Pixel
+   (token de conjunto de dados vale só pra aquele conjunto), gerar um no
+   Pixel do site e criar `<SLUG>_META_WEB_ACCESS_TOKEN` (Secret). Novo deploy
+   **por commit**, nunca "Retry deployment" de um deploy antigo.
+4. Colar o snippet acima na tag do GTM da LP.
+
+**Testar antes de ligar:** criar `<SLUG>_META_TEST_EVENT_CODE` (Gerenciador de
+Eventos → Eventos de teste), mandar uma mensagem de um clique com
+`?fbclid=teste` e ver o evento aparecer ali; depois remover a variável.
+
+**Limites:** o Meta rejeita evento com mais de 7 dias (por isso o
+`event_time` é o momento do envio); quem apaga o `Ref:` da mensagem se perde;
+uma landing page reduz o volume em relação ao anúncio direto.
 
 ## Canais fixos: bio, Google Meu Negócio (sem clique rastreável)
 
