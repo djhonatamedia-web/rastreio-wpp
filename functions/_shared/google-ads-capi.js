@@ -123,6 +123,11 @@ export async function sendGoogleAdsConversion({ conversionActionId, gclid, gbrai
       conversionValue: parseFloat(value) || 0,
       currency: currency || 'BRL',
       adIdentifiers,
+      // Required by the API (WEB | APP | IN_STORE | PHONE | OTHER). A
+      // WhatsApp lead that started from an ad click is none of the
+      // specific ones. Found via the first real send (2026-09-23): 400
+      // "events[0].event_source: Required field is missing".
+      eventSource: 'OTHER',
     }],
     validateOnly: false,
   };
