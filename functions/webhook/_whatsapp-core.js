@@ -96,7 +96,7 @@ export async function processWhatsAppMessage({ raw, env, context, client }) {
   }
 
   const existing = await env.DB
-    .prepare('SELECT id, ctwa_clid, gclid, gbraid, wbraid, ad_platform FROM whatsapp_contacts WHERE client_id = ? AND wa_id = ?')
+    .prepare('SELECT id, ctwa_clid, is_ctwa, gclid, gbraid, wbraid, ad_platform FROM whatsapp_contacts WHERE client_id = ? AND wa_id = ?')
     .bind(client.id, extracted.waId)
     .first();
 
@@ -111,12 +111,12 @@ export async function processWhatsAppMessage({ raw, env, context, client }) {
     // the same first-touch CAPI send we'd have fired had it arrived first -
     // this contact never got one, since sendWhatsAppEventToMeta() skips
     // without a ctwa_clid.
-    if (!existing.ctwa_clid && extracted.ctwaClid) {
+    if ((!existing.ctwa_clid && extracted.ctwaClid) || (!existing.is_ctwa && extracted.isAd)) {
       await env.DB
         .prepare(`
           UPDATE whatsapp_contacts SET
-            ctwa_clid = ?, ad_source_id = ?, ad_headline = ?, ad_source_url = ?,
-            ad_media_type = ?, ad_thumbnail_url = ?, is_ctwa = 1, updated_at = ?
+            ctwa_clid = COALESCE(?, ctwa_clid), ad_source_id = ?, ad_headline = ?, ad_source_url = ?,
+            ad_media_type = ?, ad_thumbnail_url = ?, is_ctwa = 1, ad_platform = 'meta', updated_at = ?
           WHERE client_id = ? AND wa_id = ?
         `)
         .bind(
@@ -179,11 +179,11 @@ export async function processWhatsAppMessage({ raw, env, context, client }) {
       extracted.adSourceUrl || null,
       extracted.adMediaType || null,
       extracted.adThumbnailUrl || null,
-      extracted.ctwaClid ? 1 : 0,
+      extracted.isAd ? 1 : 0,
       click?.gclid || null,
       click?.gbraid || null,
       click?.wbraid || null,
-      extracted.ctwaClid ? 'meta' : platformFor(click),
+      extracted.isAd ? 'meta' : platformFor(click),
       click?.utm_source || null,
       click?.utm_medium || null,
       click?.utm_campaign || null,
@@ -360,6 +360,20 @@ function extractMessage(raw) {
   const adReply = msg.content?.contextInfo?.externalAdReply || null;
   const ctwaClid = adReply?.ctwaClid || null;
 
+  // "Came from an ad" is NOT the same as "has a ctwa_clid". First seen on a
+  // real Vanessa lead (2026-09-24): WhatsApp declared the ad
+  // (entryPointConversionSource "ctwa_ad", externalAdReply.sourceType "ad",
+  // title + sourceID all present) but externalAdReply.ctwaClid was absent -
+  // only an opaque contextInfo.ctwaPayload came through, which is a
+  // DIFFERENT value from the clid (on Margel's leads both exist and differ),
+  // so it can't be substituted. Keying the ad flag on the clid alone left
+  // that lead looking organic in the dashboard while Meta had counted the
+  // conversation. Without the clid no CAPI event can be attributed (sends
+  // still skip - see sendWhatsAppEventToMeta), but the lead is now labeled
+  // correctly and the drawer warns about the missing clid.
+  const contextInfo = msg.content?.contextInfo || {};
+  const isAd = !!(ctwaClid || adReply?.sourceType === 'ad' || contextInfo.entryPointConversionSource === 'ctwa_ad');
+
   // Google Ads landing-page bridge (see file header) - a short code the
   // page embeds in the pre-filled WhatsApp message text, e.g. "Ref: AB12CD".
   const googleAdsCodeMatch = /\bRef:\s*([A-Za-z0-9]{6})\b/i.exec(msg.text || '');
@@ -377,6 +391,7 @@ function extractMessage(raw) {
     text: msg.text || null,
     timestamp: msg.messageTimestamp ? Math.floor(Number(msg.messageTimestamp) / 1000) : null,
     ctwaClid,
+    isAd,
     adSourceId: adReply?.sourceID || null,
     adHeadline: adReply?.title || null,
     adSourceUrl: adReply?.sourceURL || null,
