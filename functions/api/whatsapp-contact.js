@@ -176,7 +176,19 @@ function extractApiError(responseBody) {
     return null;
   }
   if (parsed?.error?.error_user_msg) return parsed.error.error_user_msg;
-  if (parsed?.error?.message) return parsed.error.message;
+  if (parsed?.error?.message) {
+    // Google APIs (Data Manager) put the actionable part - which field is
+    // wrong - in error.details[] (BadRequest.fieldViolations, ErrorInfo
+    // .reason, or a nested errors[]); .message alone is a generic
+    // "There was a problem with the request".
+    const extras = [];
+    for (const d of parsed.error.details || []) {
+      for (const v of d?.fieldViolations || []) extras.push([v.field, v.description].filter(Boolean).join(': '));
+      for (const e of d?.errors || []) if (e?.message) extras.push(e.message);
+      if (d?.reason) extras.push(d.reason);
+    }
+    return extras.length ? `${parsed.error.message} → ${extras.join(' | ')}` : parsed.error.message;
+  }
   // Google Ads partial failure is a google.rpc.Status: the specific reason
   // (e.g. the click id is too old, or the conversion action can't take
   // uploads yet) lives in details[].errors[], the top-level .message is only
