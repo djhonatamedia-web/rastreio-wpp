@@ -407,6 +407,8 @@
             </div>
           </div>
 
+          <div class="card p-4" id="revenue-card"></div>
+
           <div class="card p-4">
             <div class="font-semibold text-sm mb-3">Evolução diária</div>
             <div style="height: 260px"><canvas id="evolution-chart"></canvas></div>
@@ -584,6 +586,23 @@
                 <tbody id="ad-clicks-body" class="mono"></tbody>
               </table>
             </div>
+          </div>
+          <div class="card p-4">
+            <div class="font-semibold text-sm mb-1">Importar fechamentos</div>
+            <div class="text-xs mb-3" style="color:var(--text-dim)">
+              A venda acontece na clínica, fora do WhatsApp. Cole aqui os pacientes que
+              <b>atenderam e pagaram</b> (do sistema de agenda/financeiro ou da planilha da recepção),
+              uma linha por paciente: <span class="mono">telefone ; valor ; data</span> (a data é opcional,
+              formato <span class="mono">dd/mm/aaaa</span>). O sistema acha o contato pelo telefone, marca
+              <b>Venda</b> com o valor e devolve a conversão pras plataformas quando o lead tem origem
+              rastreada. Quem já é "Venda" é ignorado.
+            </div>
+            <textarea id="sales-import-text" class="input mono w-full" rows="6" placeholder="48991777444 ; 350,00 ; 20/09/2026&#10;(48) 9177-7444 ; 1.200,00 ; 22/09/2026"></textarea>
+            <div class="flex items-center gap-3 mt-3">
+              <button class="btn-primary" onclick="importSales()">Importar fechamentos</button>
+              <span id="sales-import-status" class="text-xs" style="color:var(--text-muted)"></span>
+            </div>
+            <div id="sales-import-result" class="text-sm mt-3"></div>
           </div>
         </section>
 
@@ -856,6 +875,7 @@
     renderSkeletonRows('by-channel-body', 5);
     document.getElementById('funnel').innerHTML = '';
     document.getElementById('click-health').innerHTML = '';
+    document.getElementById('revenue-card').innerHTML = '';
     document.getElementById('status-counts').innerHTML = '';
     if (currentTab === 'keywords') document.getElementById('keywords-board').innerHTML = '';
     if (currentTab === 'config') {
@@ -1027,6 +1047,58 @@
   // Cor de acordo com a fração de cliques capturados que viraram conversa
   // de verdade - uma taxa baixa é o sinal de que a ponte LP -> WhatsApp
   // quebrou silenciosamente (ver nota em functions/api/whatsapp-stats.js).
+  function fmtBRL(v) {
+    return Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  }
+
+  // Fechamentos = leads que viraram venda, com o valor. É o número que
+  // importa pro cliente (não conversa nem lead). Vem de "Venda" marcada no
+  // painel ou da importação da lista da clínica (Configurações).
+  function renderRevenue(rev) {
+    const el = document.getElementById('revenue-card');
+    const sales = rev.sales || 0;
+    if (!sales) {
+      el.innerHTML = `
+        <div class="font-semibold text-sm mb-1">Fechamentos</div>
+        <div class="text-sm" style="color:var(--text-muted)">Nenhum fechamento registrado no período. A venda acontece na clínica, fora do WhatsApp:
+        importe a lista de pacientes atendidos em <b>Configurações → Importar fechamentos</b>, ou marque "Venda" no painel do contato.</div>
+      `;
+      return;
+    }
+    const ticket = sales ? rev.total / sales : 0;
+    const rows = (rev.by_channel || []).map(r => {
+      const label = r.channel === 'meta' ? 'Meta Ads' : r.channel === 'organico' ? 'Orgânico / sem origem' : (AD_PLATFORM_LABELS[r.channel] || r.channel);
+      const share = rev.total ? Math.round((r.revenue / rev.total) * 100) : 0;
+      return `
+        <tr class="row-hover border-b">
+          <td class="py-2 pr-3">${escapeHtml(label)}</td>
+          <td class="py-2 pr-3">${r.sales}</td>
+          <td class="py-2 pr-3">${fmtBRL(r.revenue)}</td>
+          <td class="py-2 pr-3">${share}%</td>
+        </tr>`;
+    }).join('');
+    el.innerHTML = `
+      <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
+        <div class="font-semibold text-sm">Fechamentos</div>
+        <div class="text-sm mono">
+          <span style="color:var(--text-muted)">Vendas:</span> ${sales}
+          <span style="color:var(--text-muted)"> · Receita:</span> <b>${fmtBRL(rev.total)}</b>
+          <span style="color:var(--text-muted)"> · Ticket médio:</span> ${fmtBRL(ticket)}
+        </div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-xs uppercase tracking-wider border-b" style="color:var(--text-muted)">
+              <th class="py-2 pr-3">Canal</th><th class="py-2 pr-3">Vendas</th><th class="py-2 pr-3">Receita</th><th class="py-2 pr-3">% da receita</th>
+            </tr>
+          </thead>
+          <tbody class="mono">${rows}</tbody>
+        </table>
+      </div>
+    `;
+  }
+
   function healthColor(total, pct) {
     if (total >= 5 && pct < 15) return 'var(--stage-lost-text)'; // vermelho
     if (pct < 50) return 'var(--chart-scheduled)'; // amarelo
@@ -1089,6 +1161,7 @@
       document.getElementById('by-ad-body').innerHTML = '';
       document.getElementById('by-channel-body').innerHTML = '';
       document.getElementById('click-health').innerHTML = '';
+      document.getElementById('revenue-card').innerHTML = '';
       return;
     }
     const data = await res.json();
@@ -1098,6 +1171,7 @@
     renderByAd(data.by_ad || []);
     renderByChannel(data.by_channel || []);
     renderClickHealth(data.click_health || { total: 0, matched: 0 }, data.meta_coverage || { total: 0, with_id: 0 });
+    renderRevenue(data.revenue || { sales: 0, total: 0, by_channel: [] });
   }
 
   document.querySelectorAll('#range-selector button[data-days]').forEach(btn => {
@@ -1477,6 +1551,78 @@
     currentChannelCodes = {};
     (data.codes || []).forEach(c => currentChannelCodes[c.channel] = c);
     renderChannelLinks();
+  }
+
+  // "1.200,00" / "R$ 350,5" / "350.50" / "1200" -> number (pt-BR spreadsheets).
+  function parseMoney(raw) {
+    let s = String(raw || '').replace(/R\$/gi, '').replace(/\s/g, '');
+    if (!s) return NaN;
+    if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
+    else if (/^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, '');
+    return Number(s);
+  }
+
+  // Aceita ; ou TAB (o que o Excel/Planilhas copiam) - vírgula não, porque é
+  // o separador decimal. Linhas de cabeçalho (sem dígitos no telefone) saem.
+  function parseSalesText(text) {
+    const rows = [];
+    for (const line of String(text || '').split(/\r?\n/)) {
+      if (!line.trim()) continue;
+      const parts = line.split(/;|\t/).map(p => p.trim());
+      if (parts.length < 2) { rows.push({ phone: parts[0], value: NaN, bad: true }); continue; }
+      const digits = parts[0].replace(/\D/g, '');
+      if (digits.length < 8) continue; // cabeçalho ou linha em branco
+      let date;
+      const d = (parts[2] || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+      if (d) date = `${d[3]}-${d[2].padStart(2, '0')}-${d[1].padStart(2, '0')}`;
+      else if (/^\d{4}-\d{2}-\d{2}$/.test(parts[2] || '')) date = parts[2];
+      rows.push({ phone: parts[0], value: parseMoney(parts[1]), date });
+    }
+    return rows;
+  }
+
+  async function importSales() {
+    const statusEl = document.getElementById('sales-import-status');
+    const resultEl = document.getElementById('sales-import-result');
+    const rows = parseSalesText(document.getElementById('sales-import-text').value);
+    if (!rows.length) { statusEl.textContent = 'Nada pra importar: cole ao menos uma linha "telefone ; valor".'; return; }
+    const bad = rows.filter(r => r.bad || !Number.isFinite(r.value));
+    if (bad.length) {
+      statusEl.textContent = `${bad.length} linha(s) sem valor válido (ex.: ${bad[0].phone}). Corrija e tente de novo.`;
+      return;
+    }
+    const clientName = (allClients.find(c => c.slug === currentClient) || {}).name || currentClient;
+    if (!confirm(`Registrar ${rows.length} fechamento(s) para ${clientName}?\n\nIsso marca "Venda" e envia a conversão pro Meta/Google quando o lead tem origem rastreada.`)) return;
+
+    const total = { sold: 0, already_sale: [], unmatched: [], invalid: [], sent_to_meta: 0, sent_to_google: 0 };
+    const epoch = clientEpoch;
+    resultEl.innerHTML = '';
+    for (let i = 0; i < rows.length; i += 25) {
+      statusEl.textContent = `Enviando ${Math.min(i + 25, rows.length)} de ${rows.length}…`;
+      const res = await fetch('/api/sales-import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-dash-key': key },
+        body: JSON.stringify({ client: currentClient, rows: rows.slice(i, i + 25) }),
+      });
+      if (epoch !== clientEpoch) return; // trocou de cliente no meio: não mistura o resumo
+      if (!res.ok) {
+        statusEl.textContent = '';
+        resultEl.innerHTML = errorLine('Falha ao importar (lote ' + (i / 25 + 1) + '): ' + await readError(res) + '. O que já foi enviado antes desse lote foi registrado.');
+        return;
+      }
+      const j = await res.json();
+      total.sold += j.sold; total.sent_to_meta += j.sent_to_meta; total.sent_to_google += j.sent_to_google;
+      total.already_sale.push(...j.already_sale); total.unmatched.push(...j.unmatched); total.invalid.push(...j.invalid);
+    }
+    statusEl.textContent = '';
+    const list = (arr, fmt) => arr.length ? `<div class="text-xs mono mt-1" style="color:var(--text-muted)">${arr.slice(0, 30).map(fmt).map(escapeHtml).join('<br>')}${arr.length > 30 ? `<br>… e mais ${arr.length - 30}` : ''}</div>` : '';
+    resultEl.innerHTML = `
+      <div><b>${total.sold}</b> fechamento(s) registrado(s) · enviados ao Meta: ${total.sent_to_meta} · ao Google: ${total.sent_to_google}</div>
+      ${total.already_sale.length ? `<div class="mt-1">${total.already_sale.length} já eram "Venda" (ignorados)</div>` : ''}
+      ${total.unmatched.length ? `<div class="mt-1" style="color:var(--stage-lost-text)">${total.unmatched.length} sem contato correspondente (o paciente nunca falou com o WhatsApp da clínica, ou usa outro número):</div>${list(total.unmatched, u => u.phone)}` : ''}
+      ${total.invalid.length ? `<div class="mt-1" style="color:var(--stage-lost-text)">${total.invalid.length} inválido(s):</div>${list(total.invalid, u => `${u.phone} (${u.reason})`)}` : ''}
+    `;
+    loadStats();
   }
 
   async function loadAdClicks() {

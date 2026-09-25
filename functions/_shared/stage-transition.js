@@ -21,8 +21,12 @@ import { sendGoogleAdsConversion } from './google-ads-capi.js';
 import { getConfigValue } from './client-config.js';
 import { STAGE_TO_META_EVENT, STAGE_TO_GOOGLE_ADS_ENV_VAR } from '../../config/whatsapp.js';
 
-// source: 'manual' (dashboard button) | 'keyword' (trigger phrase match)
-export async function applyStageTransition({ env, client, waId, newStatus, source, value, currency }) {
+// source: 'manual' (dashboard button) | 'keyword' (trigger phrase match) | 'import'
+// (closings imported from the clinic's records - functions/api/sales-import.js).
+// occurredAt (unix seconds, optional): when the stage REALLY happened, stored as
+// the event's event_time so revenue-by-day is right for an imported sale from
+// last week. The CAPI sends still use 'now' - Meta rejects events older than 7 days.
+export async function applyStageTransition({ env, client, waId, newStatus, source, value, currency, occurredAt }) {
   const contact = await env.DB
     .prepare('SELECT wa_id, phone, ctwa_clid, gclid, gbraid, wbraid, fbc, fbp, client_ip, client_user_agent, landing_url FROM whatsapp_contacts WHERE client_id = ? AND wa_id = ?')
     .bind(client.id, waId)
@@ -44,7 +48,7 @@ export async function applyStageTransition({ env, client, waId, newStatus, sourc
     .run();
 
   if (!metaEventName) {
-    await insertEvent(env, { client, waId, eventName: newStatus, eventId, now, value, currency, sentToMeta: 0, eventSource });
+    await insertEvent(env, { client, waId, eventName: newStatus, eventId, now, eventTime: occurredAt, value, currency, sentToMeta: 0, eventSource });
     return { ok: true, status: newStatus, capi: 'skipped: no event mapped for this status' };
   }
 
@@ -54,7 +58,7 @@ export async function applyStageTransition({ env, client, waId, newStatus, sourc
   ]);
 
   await insertEvent(env, {
-    client, waId, eventName: metaEventName, eventId, now, value, currency, eventSource,
+    client, waId, eventName: metaEventName, eventId, now, eventTime: occurredAt, value, currency, eventSource,
     sentToMeta: metaOutcome.attempted ? 1 : 0,
     statusCode: metaOutcome.statusCode, responseOk: metaOutcome.responseOk,
     responseBody: metaOutcome.responseBody, payloadSent: metaOutcome.payloadSent,
@@ -165,7 +169,7 @@ async function sendGoogleAdsIfNeeded({ env, client, waId, contact, newStatus, va
 }
 
 async function insertEvent(env, {
-  client, waId, eventName, eventId, now, value, currency, sentToMeta, statusCode, responseOk, responseBody, payloadSent, eventSource,
+  client, waId, eventName, eventId, now, eventTime, value, currency, sentToMeta, statusCode, responseOk, responseBody, payloadSent, eventSource,
   googleAdsStatusCode, googleAdsResponseOk, googleAdsResponseBody, googleAdsPayloadSent,
 }) {
   await env.DB.prepare(`
@@ -176,7 +180,7 @@ async function insertEvent(env, {
       created_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
-    client.id, waId, eventName, eventId, now, eventSource,
+    client.id, waId, eventName, eventId, eventTime || now, eventSource,
     value != null ? parseFloat(value) || 0 : null, currency || null,
     sentToMeta, statusCode || null, responseOk ?? null, responseBody || null, payloadSent || null,
     googleAdsStatusCode || null, googleAdsResponseOk ?? null, googleAdsResponseBody || null, googleAdsPayloadSent || null,

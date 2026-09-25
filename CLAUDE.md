@@ -52,7 +52,8 @@ Cada linha de cada tabela pertence a um `client_id` — ver
 |---|---|
 | `functions/webhook/whatsapp/[slug].js` | Adapter — resolve cliente pelo webhook_slug, delega pro core |
 | `functions/webhook/_whatsapp-core.js` | Parsing do payload uazapi, upsert de contato, atribuição |
-| `functions/webhook/_whatsapp-capi.js` | Envia evento `business_messaging` pra Meta |
+| `functions/webhook/_whatsapp-capi.js` | Envia evento `business_messaging` pra Meta (via `ctwa_clid`) |
+| `functions/webhook/_meta-web-capi.js` | Envia evento `website` pra Meta (via `fbc`, caminho landing page → WhatsApp) |
 | `functions/_shared/google-ads-capi.js` | Envia conversão pro Google Ads (Data Manager API, `events:ingest`) |
 | `functions/_shared/stage-transition.js` | `applyStageTransition()` — único caminho pra mudar estágio |
 | `functions/_shared/text-normalize.js` | `normalize()` — usado no match de palavra-chave |
@@ -69,9 +70,10 @@ Cada linha de cada tabela pertence a um `client_id` — ver
 | `functions/api/clients.js` | GET/POST — aba "Clientes" (lista/cria cliente) |
 | `functions/api/client-status.js` | GET — checklist de onboarding por cliente (só booleanos, nunca valor de credencial) |
 | `functions/api/track-click.js` | POST público — captura `gclid`/`gbraid`/`wbraid` de landing page |
+| `functions/api/sales-import.js` | POST — importa fechamentos (telefone + valor + data), marca Venda e devolve a conversão (ver `docs/fechamentos.md`) |
 | `functions/api/channel-codes.js` | GET/POST/DELETE — aba "Configurações", canais fixos (bio/GMB) |
 | `config/whatsapp.js` | Mapas estágio→evento, status válidos, palavras-chave, Google Ads |
-| `migrations/0001-0008` | Schema D1, em ordem (ver nomes dos arquivos) |
+| `migrations/0001-0009` | Schema D1, em ordem (ver nomes dos arquivos) |
 | `dash/index.html` | Dashboard single-file (Tailwind CDN, sem build) |
 
 ## Deep reference
@@ -80,7 +82,8 @@ Cada linha de cada tabela pertence a um `client_id` — ver
 |---|---|
 | Payload real do uazapi, campo por campo | `docs/payload-uazapi.md` |
 | Formato do Meta CAPI business_messaging | `docs/capi-whatsapp.md` |
-| Ponte gclid → WhatsApp (Google Ads) | `docs/google-ads-whatsapp.md` |
+| Ponte gclid → WhatsApp (Google Ads) e Meta pela landing page | `docs/google-ads-whatsapp.md` |
+| Trazer o fechamento (venda) pro funil | `docs/fechamentos.md` |
 | Funil automático por palavra-chave | `docs/funil-por-palavra-chave.md` |
 | Por que IDs vão pro D1 e credenciais não | `docs/client-config.md` |
 | Modelo multi-tenant e onboarding de cliente | `docs/multi-tenant.md` |

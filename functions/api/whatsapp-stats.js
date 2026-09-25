@@ -126,6 +126,30 @@ export async function onRequestGet(context) {
       WHERE client_id = ? AND (is_ctwa = 1 OR ad_platform = 'meta_site') AND created_at >= ? AND created_at <= ?
     `).bind(client.id, from, to).first();
 
+    // Fechamentos e receita por canal. whatsapp_events ganha uma linha a cada
+    // chamada de applyStageTransition (inclusive re-cliques), então soma-se
+    // só a linha MAIS RECENTE de Purchase por contato - senão um "Venda"
+    // clicado duas vezes contaria a receita em dobro. Janela por event_time
+    // (a data real da venda, que uma importação pode informar).
+    const revenueRows = await env.DB.prepare(`
+      SELECT
+        CASE WHEN c.is_ctwa = 1 THEN 'meta' ELSE COALESCE(c.ad_platform, 'organico') END as channel,
+        COUNT(*) as sales,
+        SUM(COALESCE(e.value, 0)) as revenue
+      FROM whatsapp_events e
+      JOIN whatsapp_contacts c ON c.wa_id = e.wa_id AND c.client_id = e.client_id
+      WHERE e.id IN (
+          SELECT MAX(id) FROM whatsapp_events
+          WHERE client_id = ? AND event_name = 'Purchase' GROUP BY wa_id
+        )
+        AND e.event_time >= ? AND e.event_time <= ?
+      GROUP BY channel
+      ORDER BY revenue DESC
+    `).bind(client.id, from, to).all();
+    const revenueByChannel = (revenueRows.results || []).map(r => ({ channel: r.channel, sales: r.sales, revenue: r.revenue || 0 }));
+    const revenueTotal = revenueByChannel.reduce((a, r) => a + r.revenue, 0);
+    const salesTotal = revenueByChannel.reduce((a, r) => a + r.sales, 0);
+
     const timeseries = buildTimeseries(leadsPerDay.results || [], stagesPerDay.results || []);
 
     return json({
@@ -138,6 +162,7 @@ export async function onRequestGet(context) {
       by_channel: byChannel.results || [],
       click_health: { total: clickHealthRow?.total || 0, matched: clickHealthRow?.matched || 0 },
       meta_coverage: { total: metaCoverageRow?.total || 0, with_id: metaCoverageRow?.with_id || 0 },
+      revenue: { sales: salesTotal, total: revenueTotal, by_channel: revenueByChannel },
     });
   } catch (err) {
     return json({ error: err.message }, 500);

@@ -36,6 +36,19 @@ export function normalizePhone(ph, countryCode) {
   return digits;
 }
 
+// A key that matches the SAME person across formats: a clinic spreadsheet
+// says "(48) 99177-7444" or "48 9177-7444" (Brazil's 9th digit is often
+// missing on older records), a WhatsApp jid says "554891777444". DDD + the
+// last 8 digits is stable across all of those. Not for hashing/CAPI (use
+// normalizePhone for that) - only for joining a list against our contacts.
+export function phoneMatchKey(ph) {
+  const digits = String(ph || '').replace(/\D/g, '').replace(/^0+/, '');
+  if (!digits) return '';
+  const local = digits.length >= 12 && digits.startsWith('55') ? digits.slice(2) : digits;
+  if (local.length < 10) return '';
+  return local.slice(0, 2) + local.slice(-8);
+}
+
 // Meta Advanced Matching spec for fn/ln is lowercase only — do NOT strip
 // punctuation/accents.
 export function normalizeName(name) {
