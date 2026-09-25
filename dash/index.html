@@ -443,6 +443,20 @@
               <label class="flex items-center gap-2 text-sm" style="color:var(--text-dim)">
                 <input type="checkbox" id="conversas-only-ctwa"> só CTWA
               </label>
+              <select id="conversas-status" class="input" style="width:9.5rem" onchange="loadContacts()" title="Filtrar pelo estágio atual">
+                <option value="">Todos os estágios</option>
+                <option value="lead">Lead</option>
+                <option value="qualified">Qualificado</option>
+                <option value="scheduled">Agendado</option>
+                <option value="sale">Venda</option>
+                <option value="lost">Perdido</option>
+              </select>
+              <select id="conversas-stale" class="input" style="width:11rem" onchange="loadContacts()" title="Útil com 'Agendado': mostra quem agendou e ninguém voltou pra fechar">
+                <option value="0">Qualquer tempo parado</option>
+                <option value="3">Parado há +3 dias</option>
+                <option value="7">Parado há +7 dias</option>
+                <option value="14">Parado há +14 dias</option>
+              </select>
               <span class="text-xs" style="color:var(--text-muted)">chegou de</span>
               <input type="date" id="conversas-from" class="input" style="width:9.5rem" onchange="loadContacts()">
               <span class="text-xs" style="color:var(--text-muted)">até</span>
@@ -1235,6 +1249,10 @@
     const onlyCtwa = document.getElementById('conversas-only-ctwa').checked ? '1' : '0';
     const params = new URLSearchParams({ key, client: currentClient, only_ctwa: onlyCtwa });
     if (search) params.set('search', search);
+    const statusFilter = document.getElementById('conversas-status').value;
+    const staleDays = document.getElementById('conversas-stale').value;
+    if (statusFilter) params.set('status', statusFilter);
+    if (staleDays !== '0') params.set('stale_days', staleDays);
     const fromValue = document.getElementById('conversas-from').value;
     const toValue = document.getElementById('conversas-to').value;
     // Fim do dia selecionado em "até", pra incluir o dia inteiro na janela.

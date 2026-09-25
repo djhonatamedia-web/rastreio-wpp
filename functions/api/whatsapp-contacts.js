@@ -33,12 +33,19 @@ export async function onRequestGet(context) {
   const from = url.searchParams.get('from') ? parseInt(url.searchParams.get('from'), 10) : null;
   const to = url.searchParams.get('to') ? parseInt(url.searchParams.get('to'), 10) : null;
   const limit = clampInt(url.searchParams.get('limit'), 100, 1, 500);
+  // `stale_days`: só contatos cujo estágio atual não muda há N dias. Serve
+  // pra achar "Agendado" que ninguém voltou pra fechar (Venda/Perdido).
+  const staleDays = clampInt(url.searchParams.get('stale_days'), 0, 0, 365);
 
   const clauses = ['client_id = ?'];
   const binds = [client.id];
   if (status) {
     clauses.push('status = ?');
     binds.push(status);
+  }
+  if (staleDays > 0) {
+    clauses.push('COALESCE(status_updated_at, created_at) <= ?');
+    binds.push(Math.floor(Date.now() / 1000) - staleDays * 86400);
   }
   if (onlyCtwa) {
     clauses.push('is_ctwa = 1');
