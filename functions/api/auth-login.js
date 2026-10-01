@@ -14,6 +14,13 @@ import { verifyPassword, createSessionCookie } from '../_shared/auth.js';
 export async function onRequestPost(context) {
   const { request, env } = context;
 
+  if (!env.SESSION_SECRET) {
+    // Falha de configuracao, nao de credencial - mensagem clara em vez de
+    // deixar createSessionCookie() estourar e o Cloudflare devolver um
+    // "error code: 1101" opaco sem dizer o motivo.
+    return json({ error: 'SESSION_SECRET não configurado no Cloudflare Pages (variável de ambiente)' }, 500);
+  }
+
   let body;
   try {
     body = await request.json();
