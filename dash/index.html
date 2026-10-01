@@ -136,6 +136,35 @@
   }
   .dropdown-item:hover { background: var(--surface-hover); }
   .dropdown-divider { height: 1px; background: var(--border); margin: 0.25rem 0.125rem; }
+  .dropdown-panel {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md);
+    box-shadow: var(--shadow-md); padding: 0.375rem; max-height: 14rem; overflow-y: auto; top: calc(100% + 0.25rem);
+  }
+
+  /* Calendário (Bloco B2) */
+  .calendar-weekdays, .calendar-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 0.375rem; }
+  .calendar-weekdays { margin-bottom: 0.5rem; }
+  .calendar-weekdays div { font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); text-align: center; }
+  .calendar-cell {
+    min-height: 5.5rem; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.3rem;
+    cursor: pointer; display: flex; flex-direction: column; gap: 0.15rem; overflow: hidden; background: var(--surface);
+  }
+  .calendar-cell:hover { background: var(--surface-hover); }
+  .calendar-cell-empty { border: none; cursor: default; background: none; }
+  .calendar-cell-today { border-color: var(--accent); }
+  .calendar-cell-selected { background: var(--accent-soft); border-color: var(--accent); }
+  .calendar-daynum { font-size: 0.75rem; font-weight: 600; color: var(--text-dim); }
+  .calendar-chip {
+    font-size: 0.625rem; padding: 0.1rem 0.3rem; border-radius: 4px; background: var(--surface-hover);
+    color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .calendar-chip-attended { background: var(--accent-soft); color: var(--accent-hover); }
+  .calendar-chip-no_show, .calendar-chip-canceled { background: #fde8e8; color: var(--stage-lost-text); }
+  .calendar-chip-confirmed { background: #fff6da; color: #92650a; }
+
+  /* Crescimento (Bloco A5/B6) */
+  .growth-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 0.75rem; }
+  .growth-tile { background: var(--surface-hover); border-radius: var(--radius-md); padding: 0.75rem; }
 
   .nav-list { padding: 0.5rem 0.75rem; display: flex; flex-direction: column; gap: 0.125rem; flex: 1; }
   .nav-item {
@@ -323,10 +352,12 @@
       <nav class="nav-list">
         <div class="nav-item active" data-tab="visao-geral"><svg class="icon"><use href="#icon-grid"/></svg><span>Visão Geral</span></div>
         <div class="nav-item" data-tab="conversas"><svg class="icon"><use href="#icon-chat"/></svg><span>Conversas</span></div>
-        <div class="nav-item" data-tab="eventos"><svg class="icon"><use href="#icon-activity"/></svg><span>Eventos</span></div>
-        <div class="nav-item" data-tab="keywords"><svg class="icon"><use href="#icon-tag"/></svg><span>Palavras-chave</span></div>
-        <div class="nav-item" data-tab="config"><svg class="icon"><use href="#icon-sliders"/></svg><span>Configurações</span></div>
-        <div class="nav-item" data-tab="clientes"><svg class="icon"><use href="#icon-users"/></svg><span>Clientes</span></div>
+        <div class="nav-item" data-tab="calendario"><svg class="icon"><use href="#icon-calendar"/></svg><span>Calendário</span></div>
+        <div class="nav-item admin-only" data-tab="eventos"><svg class="icon"><use href="#icon-activity"/></svg><span>Eventos</span></div>
+        <div class="nav-item admin-only" data-tab="keywords"><svg class="icon"><use href="#icon-tag"/></svg><span>Palavras-chave</span></div>
+        <div class="nav-item admin-only" data-tab="config"><svg class="icon"><use href="#icon-sliders"/></svg><span>Configurações</span></div>
+        <div class="nav-item admin-only" data-tab="clientes"><svg class="icon"><use href="#icon-users"/></svg><span>Clientes</span></div>
+        <div class="nav-item admin-only" data-tab="usuarios"><svg class="icon"><use href="#icon-key"/></svg><span>Usuários</span></div>
       </nav>
 
       <div class="sidebar-footer">
@@ -339,6 +370,12 @@
           <svg id="theme-icon-moon" class="icon hidden"><use href="#icon-moon"/></svg>
           <span>Alternar tema</span>
         </button>
+        <div class="sidebar-footer-row" style="margin-top:0.25rem">
+          <span id="session-user" class="text-xs truncate" style="color:var(--text-muted)">—</span>
+          <button class="sidebar-footer-btn" style="width:auto;padding:0.25rem 0.5rem" onclick="logout()" title="Sair">
+            <svg class="icon" style="width:1em;height:1em"><use href="#icon-x"/></svg>
+          </button>
+        </div>
       </div>
     </aside>
 
@@ -375,6 +412,8 @@
             <button class="btn-primary" id="range-custom-apply">Aplicar</button>
             <span id="range-custom-error" class="text-xs hidden" style="color:var(--stage-lost-text)"></span>
           </div>
+
+          <div id="growth-card" class="card p-4"></div>
 
           <div id="click-health" class="card p-4"></div>
 
@@ -480,6 +519,29 @@
                 <tbody id="conversas-body" class="mono"></tbody>
               </table>
             </div>
+          </div>
+        </section>
+
+        <!-- Calendário tab (Bloco B2) -->
+        <section id="tab-calendario" class="fade-in hidden space-y-4">
+          <div class="card p-4">
+            <div class="flex items-center justify-between flex-wrap gap-2 mb-4">
+              <div class="flex items-center gap-2">
+                <button class="action-btn" onclick="calendarShift(-1)">←</button>
+                <div id="calendar-label" class="font-semibold text-sm" style="min-width:10rem;text-align:center">—</div>
+                <button class="action-btn" onclick="calendarShift(1)">→</button>
+                <button class="action-btn" onclick="calendarToday()">Hoje</button>
+              </div>
+              <button class="btn-primary" onclick="openApptModal()">
+                <svg class="icon"><use href="#icon-plus"/></svg> Nova consulta
+              </button>
+            </div>
+            <div id="calendar-grid" class="calendar-grid"></div>
+          </div>
+
+          <div class="card p-4">
+            <div class="font-semibold text-sm mb-3" id="calendar-day-title">Hoje</div>
+            <div id="calendar-day-list" class="space-y-2"></div>
           </div>
         </section>
 
@@ -654,6 +716,52 @@
           </div>
         </section>
 
+        <!-- Usuários tab (Bloco B1, admin-only) -->
+        <section id="tab-usuarios" class="fade-in hidden space-y-4">
+          <div class="callout">
+            <svg class="icon"><use href="#icon-info"/></svg>
+            <div>
+              Login de <b>equipe</b> fica preso a um único cliente (sem seletor,
+              sem acesso a Eventos/Palavras-chave/Configurações/Clientes). Login
+              de <b>admin</b> enxerga tudo, igual você.
+            </div>
+          </div>
+          <div class="card p-4">
+            <div class="font-semibold text-sm mb-3">Novo usuário</div>
+            <div class="flex gap-2 flex-wrap items-end">
+              <div>
+                <label class="text-xs block mb-1" style="color:var(--text-dim)">Nome</label>
+                <input type="text" id="new-user-name" placeholder="ex: Secretária Vanessa" class="input">
+              </div>
+              <div>
+                <label class="text-xs block mb-1" style="color:var(--text-dim)">E-mail</label>
+                <input type="email" id="new-user-email" placeholder="ex: secretaria@clinica.com" class="input">
+              </div>
+              <div>
+                <label class="text-xs block mb-1" style="color:var(--text-dim)">Senha</label>
+                <input type="text" id="new-user-password" placeholder="mínimo 8 caracteres" class="input">
+              </div>
+              <div>
+                <label class="text-xs block mb-1" style="color:var(--text-dim)">Papel</label>
+                <select id="new-user-role" class="input" onchange="document.getElementById('new-user-client-wrap').classList.toggle('hidden', this.value !== 'team')">
+                  <option value="team">Equipe</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+              <div id="new-user-client-wrap">
+                <label class="text-xs block mb-1" style="color:var(--text-dim)">Cliente</label>
+                <select id="new-user-client" class="input"></select>
+              </div>
+              <button class="btn-primary" onclick="createUser()">Criar</button>
+            </div>
+            <div id="new-user-error" class="text-xs mt-2 hidden" style="color:var(--stage-lost-text)"></div>
+          </div>
+          <div class="card p-4">
+            <div class="font-semibold text-sm mb-3">Usuários cadastrados</div>
+            <div id="users-list" class="space-y-2"></div>
+          </div>
+        </section>
+
       </main>
     </div>
   </div>
@@ -666,10 +774,11 @@
       <div class="brand-mark" style="width:1.75rem;height:1.75rem"><svg class="icon" style="width:0.9em;height:0.9em"><use href="#icon-key"/></svg></div>
       <div class="font-semibold">Rastreio WPP</div>
     </div>
-    <div class="text-sm mb-4" style="color:var(--text-dim)">Cole o <code class="mono">DASH_KEY</code> configurado nas variáveis de ambiente do Cloudflare.</div>
-    <input id="auth-input" type="password" placeholder="DASH_KEY" class="input w-full mb-3">
+    <div class="text-sm mb-4" style="color:var(--text-dim)">Entre com seu e-mail e senha.</div>
+    <input id="auth-email" type="email" placeholder="E-mail" class="input w-full mb-2" autocomplete="username">
+    <input id="auth-password" type="password" placeholder="Senha" class="input w-full mb-3" autocomplete="current-password">
     <button id="auth-submit" class="btn-primary w-full">Entrar</button>
-    <div id="auth-error" class="text-xs mt-2 hidden" style="color:var(--stage-lost-text)">Chave inválida ou sem permissão.</div>
+    <div id="auth-error" class="text-xs mt-2 hidden" style="color:var(--stage-lost-text)">E-mail ou senha inválidos.</div>
   </div>
 </div>
 
@@ -706,9 +815,72 @@
   </div>
 </div>
 
+<!-- Nova consulta (Bloco B2) -->
+<div id="appt-modal" class="hidden fixed inset-0 flex items-center justify-center p-4 z-50" style="background: rgba(10,12,16,0.5)" onclick="if(event.target===this) closeApptModal()">
+  <div class="card p-5 w-full max-w-md" style="box-shadow: var(--shadow-md)">
+    <div class="flex items-center justify-between mb-3">
+      <div class="font-semibold">Nova consulta</div>
+      <button class="icon-btn" onclick="closeApptModal()"><svg class="icon"><use href="#icon-x"/></svg></button>
+    </div>
+    <div class="space-y-3">
+      <div class="relative">
+        <label class="text-xs block mb-1" style="color:var(--text-dim)">Paciente (busque por telefone ou nome)</label>
+        <input type="text" id="appt-contact-search" placeholder="Digite pra buscar…" class="input w-full" oninput="searchApptContact(this.value)" autocomplete="off">
+        <div id="appt-contact-results" class="dropdown-panel hidden" style="position:absolute;z-index:10;width:100%"></div>
+        <div id="appt-contact-picked" class="text-xs mt-1" style="color:var(--accent)"></div>
+      </div>
+      <div>
+        <label class="text-xs block mb-1" style="color:var(--text-dim)">Data e hora</label>
+        <input type="datetime-local" id="appt-datetime" class="input w-full">
+      </div>
+      <div>
+        <label class="text-xs block mb-1" style="color:var(--text-dim)">Procedimento (opcional)</label>
+        <input type="text" id="appt-procedure" placeholder="ex: Fios Aptos" class="input w-full">
+      </div>
+      <div id="appt-error" class="text-xs hidden" style="color:var(--stage-lost-text)"></div>
+      <button class="btn-primary w-full" onclick="submitAppt()">Agendar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Marcar Venda com conciliação (Bloco B4) -->
+<div id="sale-modal" class="hidden fixed inset-0 flex items-center justify-center p-4 z-50" style="background: rgba(10,12,16,0.5)" onclick="if(event.target===this) closeSaleModal()">
+  <div class="card p-5 w-full max-w-sm" style="box-shadow: var(--shadow-md)">
+    <div class="flex items-center justify-between mb-3">
+      <div class="font-semibold">Marcar Venda</div>
+      <button class="icon-btn" onclick="closeSaleModal()"><svg class="icon"><use href="#icon-x"/></svg></button>
+    </div>
+    <div class="space-y-3">
+      <div>
+        <label class="text-xs block mb-1" style="color:var(--text-dim)">Valor combinado (R$)</label>
+        <input type="text" id="sale-value" placeholder="0,00" class="input w-full">
+      </div>
+      <div>
+        <label class="text-xs block mb-1" style="color:var(--text-dim)">Pagamento</label>
+        <select id="sale-payment-status" class="input w-full" onchange="document.getElementById('sale-paid-wrap').classList.toggle('hidden', this.value !== 'partial')">
+          <option value="paid">Pago integral</option>
+          <option value="pending">A receber (nada pago ainda)</option>
+          <option value="partial">Parcial</option>
+        </select>
+      </div>
+      <div id="sale-paid-wrap" class="hidden">
+        <label class="text-xs block mb-1" style="color:var(--text-dim)">Quanto já entrou (R$)</label>
+        <input type="text" id="sale-paid-amount" placeholder="0,00" class="input w-full">
+      </div>
+      <button class="btn-primary w-full" onclick="submitSale()">Confirmar</button>
+    </div>
+  </div>
+</div>
+
 <script>
-  let key = new URLSearchParams(location.search).get('key') || sessionStorage.getItem('dashKey') || '';
+  // DASH_KEY legada: fica vazia agora que o login é por sessão (cookie
+  // HttpOnly, enviado automaticamente pelo fetch do mesmo domínio). Mantida
+  // só pra não precisar reescrever toda chamada que ainda interpola `key`
+  // na URL/header - uma string vazia aí é inofensiva, o backend tenta o
+  // cookie primeiro (ver functions/_shared/auth.js, requireSession()).
+  let key = '';
   let currentClient = new URLSearchParams(location.search).get('client') || localStorage.getItem('currentClient') || '';
+  let currentRole = null; // 'admin' | 'team', resolvido por /api/auth-me
   let allClients = [];
   let autoRefreshTimer = null;
   let lastTimeseries = [];
@@ -758,32 +930,57 @@
     ov.classList.toggle('overlay-visible', open);
   }
 
-  // Returns the client list on success (auth valid), or null (401). This
-  // endpoint doesn't require a `client` param, unlike the data endpoints,
-  // so it doubles as the login check.
-  async function tryAuth(k) {
-    const res = await fetch(`/api/clients?key=${encodeURIComponent(k)}`);
-    if (res.status === 401) return null;
-    const data = await res.json();
-    return data.clients || [];
+  // /api/auth-me devolve quem está logado a partir do cookie de sessão -
+  // null (401) quando não há sessão válida, o que também serve como o
+  // check de "precisa logar de novo".
+  async function fetchMe() {
+    const res = await fetch('/api/auth-me');
+    if (!res.ok) return null;
+    return res.json();
   }
 
   async function boot() {
-    const clients = key ? await tryAuth(key) : null;
-    if (clients) {
-      sessionStorage.setItem('dashKey', key);
-      document.getElementById('auth-gate').classList.add('hidden');
-      document.getElementById('app').classList.remove('hidden');
-      setupClientSwitcher(clients);
-      // Deep link: reloading or sharing ?contact=<wa_id> lands on that
-      // lead. Runs after setupClientSwitcher so the client is resolved
-      // first (and after the clearClientViews it triggers, which closes
-      // any open drawer).
-      const deepLink = new URLSearchParams(location.search).get('contact');
-      if (deepLink) { activateTab('conversas'); openContact(deepLink); }
-    } else {
+    const me = await fetchMe();
+    if (!me) {
       document.getElementById('auth-gate').classList.remove('hidden');
+      return;
     }
+    await enterApp(me);
+  }
+
+  // Admin enxerga qualquer cliente (seletor de workspace de sempre);
+  // equipe fica presa ao único cliente que a sessão devolve, sem seletor -
+  // GET /api/clients é admin-only no backend, então nem tenta pra equipe.
+  async function enterApp(me) {
+    currentRole = me.role;
+    document.getElementById('auth-gate').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+    document.getElementById('session-user').textContent = me.name + (me.role === 'admin' ? ' · admin' : ' · equipe');
+    document.querySelectorAll('.admin-only').forEach(el => el.classList.toggle('hidden', me.role !== 'admin'));
+
+    if (me.role === 'admin') {
+      const res = await fetch('/api/clients');
+      const data = res.ok ? await res.json() : { clients: [] };
+      setupClientSwitcher(data.clients || []);
+    } else {
+      allClients = me.client ? [{ slug: me.client.slug, name: me.client.name }] : [];
+      currentClient = me.client ? me.client.slug : '';
+      document.getElementById('workspace-btn').classList.add('cursor-default');
+      document.querySelector('#workspace-btn svg:last-child').classList.add('hidden'); // sem seta: não é um seletor pra equipe
+      renderWorkspacePanel();
+      onClientChanged();
+    }
+
+    // Deep link: reloading or sharing ?contact=<wa_id> lands on that lead.
+    // Runs after the client is resolved (and after the clearClientViews it
+    // triggers, which closes any open drawer).
+    const deepLink = new URLSearchParams(location.search).get('contact');
+    if (deepLink) { activateTab('conversas'); openContact(deepLink); }
+  }
+
+  async function logout() {
+    await fetch('/api/auth-logout', { method: 'POST' });
+    location.href = '/dash';
   }
 
   function setupClientSwitcher(clients) {
@@ -829,7 +1026,10 @@
     `;
   }
 
-  function toggleWorkspacePanel() { document.getElementById('workspace-panel').classList.toggle('hidden'); }
+  function toggleWorkspacePanel() {
+    if (currentRole !== 'admin') return; // equipe não troca de cliente
+    document.getElementById('workspace-panel').classList.toggle('hidden');
+  }
   function closeWorkspacePanel() { document.getElementById('workspace-panel').classList.add('hidden'); }
   document.addEventListener('click', (e) => {
     if (!e.target.closest('.workspace-wrap')) closeWorkspacePanel();
@@ -867,6 +1067,7 @@
     // switching clients left the previous client's data up.
     if (currentTab === 'keywords') loadKeywords();
     if (currentTab === 'config') { loadConfig(); loadClientStatus(); loadChannelCodes(); loadAdClicks(); }
+    if (currentTab === 'calendario') loadCalendar();
   }
 
   function clearClientViews() {
@@ -890,7 +1091,9 @@
     document.getElementById('funnel').innerHTML = '';
     document.getElementById('click-health').innerHTML = '';
     document.getElementById('revenue-card').innerHTML = '';
+    document.getElementById('growth-card').innerHTML = '';
     document.getElementById('status-counts').innerHTML = '';
+    if (currentTab === 'calendario') { document.getElementById('calendar-grid').innerHTML = ''; document.getElementById('calendar-day-list').innerHTML = loadingLine('Carregando…'); }
     if (currentTab === 'keywords') document.getElementById('keywords-board').innerHTML = '';
     if (currentTab === 'config') {
       document.getElementById('config-fields-meta').innerHTML = '';
@@ -916,32 +1119,40 @@
     }
   }
 
-  document.getElementById('auth-submit').addEventListener('click', async () => {
-    const k = document.getElementById('auth-input').value.trim();
-    const clients = await tryAuth(k);
-    if (clients) {
-      key = k;
-      boot();
-    } else {
-      document.getElementById('auth-error').classList.remove('hidden');
+  async function doLogin() {
+    const email = document.getElementById('auth-email').value.trim();
+    const password = document.getElementById('auth-password').value;
+    const errorEl = document.getElementById('auth-error');
+    errorEl.classList.add('hidden');
+    if (!email || !password) return;
+    const res = await fetch('/api/auth-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    if (!res.ok) {
+      errorEl.textContent = (await res.json().catch(() => ({}))).error || 'E-mail ou senha inválidos.';
+      errorEl.classList.remove('hidden');
+      return;
     }
-  });
+    boot();
+  }
+  document.getElementById('auth-submit').addEventListener('click', doLogin);
+  document.getElementById('auth-password').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
 
-  const TAB_TITLES = { 'visao-geral': 'Visão Geral', 'conversas': 'Conversas', 'eventos': 'Eventos', 'keywords': 'Palavras-chave', 'config': 'Configurações', 'clientes': 'Clientes' };
+  const TAB_TITLES = { 'visao-geral': 'Visão Geral', 'conversas': 'Conversas', 'calendario': 'Calendário', 'eventos': 'Eventos', 'keywords': 'Palavras-chave', 'config': 'Configurações', 'clientes': 'Clientes', 'usuarios': 'Usuários' };
+  const ALL_TABS = Object.keys(TAB_TITLES);
 
   function activateTab(target) {
     currentTab = target;
     document.querySelectorAll('.nav-item').forEach(t => t.classList.toggle('active', t.dataset.tab === target));
-    document.getElementById('tab-visao-geral').classList.toggle('hidden', target !== 'visao-geral');
-    document.getElementById('tab-conversas').classList.toggle('hidden', target !== 'conversas');
-    document.getElementById('tab-eventos').classList.toggle('hidden', target !== 'eventos');
-    document.getElementById('tab-keywords').classList.toggle('hidden', target !== 'keywords');
-    document.getElementById('tab-config').classList.toggle('hidden', target !== 'config');
-    document.getElementById('tab-clientes').classList.toggle('hidden', target !== 'clientes');
+    ALL_TABS.forEach(t => document.getElementById('tab-' + t).classList.toggle('hidden', t !== target));
     document.getElementById('page-title').textContent = TAB_TITLES[target] || '';
     if (target === 'keywords') loadKeywords();
     if (target === 'config') { loadConfig(); loadClientStatus(); loadChannelCodes(); loadAdClicks(); }
     if (target === 'clientes') loadClientsAdmin();
+    if (target === 'calendario') loadCalendar();
+    if (target === 'usuarios') loadUsers();
     if (window.innerWidth < 1024) toggleSidebar(false);
   }
   document.querySelectorAll('.nav-item').forEach(item => {
@@ -1088,15 +1299,24 @@
           <td class="py-2 pr-3">${escapeHtml(label)}</td>
           <td class="py-2 pr-3">${r.sales}</td>
           <td class="py-2 pr-3">${fmtBRL(r.revenue)}</td>
+          <td class="py-2 pr-3">${fmtBRL(r.received)}</td>
           <td class="py-2 pr-3">${share}%</td>
         </tr>`;
     }).join('');
+    // "A receber" só aparece quando existe (venda parcial/pendente) - a
+    // maioria das clínicas ainda marca tudo como pago integral, e o card
+    // fica igual ao de sempre nesse caso.
+    const pendingLine = rev.pending
+      ? `<span style="color:var(--text-muted)"> · A receber:</span> <b style="color:var(--stage-lost-text)">${fmtBRL(rev.pending)}</b>`
+      : '';
     el.innerHTML = `
       <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
         <div class="font-semibold text-sm">Fechamentos</div>
         <div class="text-sm mono">
           <span style="color:var(--text-muted)">Vendas:</span> ${sales}
-          <span style="color:var(--text-muted)"> · Receita:</span> <b>${fmtBRL(rev.total)}</b>
+          <span style="color:var(--text-muted)"> · Combinado:</span> <b>${fmtBRL(rev.total)}</b>
+          <span style="color:var(--text-muted)"> · Recebido:</span> <b>${fmtBRL(rev.received)}</b>
+          ${pendingLine}
           <span style="color:var(--text-muted)"> · Ticket médio:</span> ${fmtBRL(ticket)}
         </div>
       </div>
@@ -1104,12 +1324,49 @@
         <table class="w-full text-sm">
           <thead>
             <tr class="text-left text-xs uppercase tracking-wider border-b" style="color:var(--text-muted)">
-              <th class="py-2 pr-3">Canal</th><th class="py-2 pr-3">Vendas</th><th class="py-2 pr-3">Receita</th><th class="py-2 pr-3">% da receita</th>
+              <th class="py-2 pr-3">Canal</th><th class="py-2 pr-3">Vendas</th><th class="py-2 pr-3">Combinado</th><th class="py-2 pr-3">Recebido</th><th class="py-2 pr-3">% do combinado</th>
             </tr>
           </thead>
           <tbody class="mono">${rows}</tbody>
         </table>
       </div>
+    `;
+  }
+
+  // Bloco A5/B6: compara a janela atual com a janela anterior de mesma
+  // duração, por etapa do funil + compareceu/não-compareceu + recebido.
+  // `variation_pct` null = "sem base de comparação" (período anterior
+  // zerado) - mostra "novo" em vez de uma % sem sentido.
+  const GROWTH_LABELS = {
+    leads: 'Leads', qualified: 'Qualificados', scheduled: 'Agendados', sale: 'Vendas',
+    received: 'Recebido', attended: 'Compareceram', no_show: 'Não compareceram',
+  };
+  function renderGrowth(growth) {
+    const el = document.getElementById('growth-card');
+    if (!growth) { el.innerHTML = ''; return; }
+    const keys = Object.keys(GROWTH_LABELS).filter(k => growth[k]);
+    const tiles = keys.map(k => {
+      const g = growth[k];
+      const isMoney = k === 'received';
+      const valueStr = isMoney ? fmtBRL(g.current) : g.current;
+      let deltaStr, deltaColor;
+      if (g.variation_pct === null) {
+        deltaStr = 'novo'; deltaColor = 'var(--text-muted)';
+      } else {
+        const sign = g.variation_pct > 0 ? '▲' : g.variation_pct < 0 ? '▼' : '—';
+        deltaColor = g.variation_pct > 0 ? 'var(--chart-sale)' : g.variation_pct < 0 ? 'var(--stage-lost-text)' : 'var(--text-muted)';
+        deltaStr = `${sign} ${Math.abs(g.variation_pct)}%`;
+      }
+      return `
+        <div class="growth-tile">
+          <div class="text-xs" style="color:var(--text-muted)">${GROWTH_LABELS[k]}</div>
+          <div class="font-semibold mono" style="font-size:1.05rem">${valueStr}</div>
+          <div class="text-xs mono" style="color:${deltaColor}">${deltaStr} <span style="color:var(--text-muted)">vs período anterior</span></div>
+        </div>`;
+    }).join('');
+    el.innerHTML = `
+      <div class="font-semibold text-sm mb-3">Crescimento</div>
+      <div class="growth-grid">${tiles}</div>
     `;
   }
 
@@ -1176,6 +1433,7 @@
       document.getElementById('by-channel-body').innerHTML = '';
       document.getElementById('click-health').innerHTML = '';
       document.getElementById('revenue-card').innerHTML = '';
+      document.getElementById('growth-card').innerHTML = '';
       return;
     }
     const data = await res.json();
@@ -1185,7 +1443,8 @@
     renderByAd(data.by_ad || []);
     renderByChannel(data.by_channel || []);
     renderClickHealth(data.click_health || { total: 0, matched: 0 }, data.meta_coverage || { total: 0, with_id: 0 });
-    renderRevenue(data.revenue || { sales: 0, total: 0, by_channel: [] });
+    renderRevenue(data.revenue || { sales: 0, total: 0, received: 0, pending: 0, by_channel: [] });
+    renderGrowth(data.growth);
   }
 
   document.querySelectorAll('#range-selector button[data-days]').forEach(btn => {
@@ -1352,8 +1611,8 @@
     });
   }
 
-  async function markStatus(waId, newStatus, value, currency) {
-    const body = { client: currentClient, wa_id: waId, new_status: newStatus };
+  async function markStatus(waId, newStatus, value, currency, extra) {
+    const body = { client: currentClient, wa_id: waId, new_status: newStatus, ...(extra || {}) };
     if (value != null) { body.value = value; body.currency = currency || 'BRL'; }
     const res = await fetch('/api/whatsapp-status', {
       method: 'POST',
@@ -1365,16 +1624,265 @@
       return;
     }
     loadContacts();
+    loadStats(); // receita/crescimento mudam quando uma venda é marcada
     // The drawer shows the stage badge and the CAPI result of each send,
     // so it has to re-read after an action taken from either place.
     if (openContactWaId === waId) openContact(waId);
   }
 
+  // Marcar Venda agora abre um modal com conciliação (Bloco A3/B4) em vez
+  // de um prompt() só com o valor - pago integral continua sendo um clique
+  // rápido (já vem selecionado), "a receber"/"parcial" é pra quem já sabe
+  // na hora que o pagamento não fechou.
+  let saleModalWaId = null;
   function markSale(waId) {
-    const value = prompt('Valor da venda (R$):', '');
-    if (value === null) return;
-    markStatus(waId, 'sale', value ? parseFloat(value.replace(',', '.')) : null, 'BRL');
+    saleModalWaId = waId;
+    document.getElementById('sale-value').value = '';
+    document.getElementById('sale-payment-status').value = 'paid';
+    document.getElementById('sale-paid-amount').value = '';
+    document.getElementById('sale-paid-wrap').classList.add('hidden');
+    document.getElementById('sale-modal').classList.remove('hidden');
   }
+  function closeSaleModal() {
+    saleModalWaId = null;
+    document.getElementById('sale-modal').classList.add('hidden');
+  }
+  function parseMoneyInput(raw) {
+    const n = parseFloat(String(raw || '').replace(/\./g, '').replace(',', '.'));
+    return Number.isFinite(n) ? n : null;
+  }
+  function submitSale() {
+    if (!saleModalWaId) return;
+    const value = parseMoneyInput(document.getElementById('sale-value').value);
+    const paymentStatus = document.getElementById('sale-payment-status').value;
+    const paidAmount = paymentStatus === 'partial' ? parseMoneyInput(document.getElementById('sale-paid-amount').value) : null;
+    const waId = saleModalWaId;
+    closeSaleModal();
+    markStatus(waId, 'sale', value, 'BRL', { payment_status: paymentStatus, paid_amount: paidAmount });
+  }
+
+  // ===== Calendário (Bloco B2) =====
+  let calendarMonth = new Date();
+  let calendarAppointments = [];
+  let calendarSelectedDate = null;
+  const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+  const APPT_STATUS_LABELS = { scheduled: 'Agendado', confirmed: 'Confirmado', attended: 'Compareceu', no_show: 'Não compareceu', canceled: 'Cancelado' };
+
+  function ymdLocal(d) {
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  function fmtHM(unixSeconds) {
+    return new Date(unixSeconds * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function calendarShift(delta) {
+    calendarMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + delta, 1);
+    loadCalendar();
+  }
+  function calendarToday() {
+    calendarMonth = new Date();
+    calendarSelectedDate = ymdLocal(new Date());
+    loadCalendar();
+  }
+
+  async function loadCalendar() {
+    const monthStart = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
+    const monthEnd = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0, 23, 59, 59);
+    document.getElementById('calendar-label').textContent =
+      monthStart.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }).replace(/^./, c => c.toUpperCase());
+
+    const epoch = clientEpoch;
+    const params = new URLSearchParams({
+      client: currentClient,
+      from: Math.floor(monthStart.getTime() / 1000),
+      to: Math.floor(monthEnd.getTime() / 1000),
+    });
+    const res = await fetch(`/api/appointments?${params}`);
+    if (epoch !== clientEpoch) return;
+    if (!res.ok) {
+      document.getElementById('calendar-grid').innerHTML = errorLine('Não foi possível carregar o calendário: ' + await readError(res));
+      return;
+    }
+    const data = await res.json();
+    if (epoch !== clientEpoch) return;
+    calendarAppointments = data.appointments || [];
+    if (!calendarSelectedDate) calendarSelectedDate = ymdLocal(new Date());
+    renderCalendarGrid();
+    renderDayList();
+  }
+
+  function renderCalendarGrid() {
+    const grid = document.getElementById('calendar-grid');
+    const year = calendarMonth.getFullYear(), month = calendarMonth.getMonth();
+    const startOffset = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const todayStr = ymdLocal(new Date());
+
+    const byDay = {};
+    for (const a of calendarAppointments) {
+      const d = ymdLocal(new Date(a.scheduled_at * 1000));
+      (byDay[d] = byDay[d] || []).push(a);
+    }
+
+    let cells = Array.from({ length: startOffset }, () => `<div class="calendar-cell calendar-cell-empty"></div>`).join('');
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dstr = ymdLocal(new Date(year, month, day));
+      const appts = (byDay[dstr] || []).slice().sort((a, b) => a.scheduled_at - b.scheduled_at);
+      const chips = appts.slice(0, 3).map(a => `
+        <div class="calendar-chip calendar-chip-${a.status}" title="${escapeHtml(a.push_name || a.phone || '')}">
+          ${fmtHM(a.scheduled_at)} ${escapeHtml((a.push_name || a.phone || '?').split(' ')[0])}
+        </div>`).join('');
+      const more = appts.length > 3 ? `<div class="text-[10px]" style="color:var(--text-muted)">+${appts.length - 3} mais</div>` : '';
+      cells += `
+        <div class="calendar-cell ${dstr === todayStr ? 'calendar-cell-today' : ''} ${dstr === calendarSelectedDate ? 'calendar-cell-selected' : ''}" onclick="selectCalendarDay('${dstr}')">
+          <div class="calendar-daynum">${day}</div>
+          ${chips}${more}
+        </div>`;
+    }
+    grid.innerHTML = `
+      <div class="calendar-weekdays">${WEEKDAYS.map(w => `<div>${w}</div>`).join('')}</div>
+      <div class="calendar-days">${cells}</div>
+    `;
+  }
+
+  function selectCalendarDay(dstr) {
+    calendarSelectedDate = dstr;
+    renderCalendarGrid();
+    renderDayList();
+  }
+
+  function apptBadgeClass(status) {
+    if (status === 'attended') return 'sale';
+    if (status === 'no_show' || status === 'canceled') return 'lost';
+    if (status === 'confirmed') return 'qualified';
+    return 'scheduled';
+  }
+
+  function renderDayList() {
+    const [y, m, d] = calendarSelectedDate.split('-').map(Number);
+    document.getElementById('calendar-day-title').textContent =
+      new Date(y, m - 1, d).toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' });
+
+    const list = document.getElementById('calendar-day-list');
+    const appts = calendarAppointments
+      .filter(a => ymdLocal(new Date(a.scheduled_at * 1000)) === calendarSelectedDate)
+      .sort((a, b) => a.scheduled_at - b.scheduled_at);
+    if (!appts.length) {
+      list.innerHTML = `<div class="empty-state"><svg class="icon"><use href="#icon-inbox"/></svg>Nenhuma consulta neste dia.</div>`;
+      return;
+    }
+    list.innerHTML = appts.map(a => `
+      <div class="card p-3 flex items-center gap-3 flex-wrap">
+        <div class="mono text-sm" style="min-width:3.5rem">${fmtHM(a.scheduled_at)}</div>
+        <div class="min-w-0 flex-1">
+          <div class="font-medium truncate cursor-pointer" onclick="openContact('${a.wa_id}')">${escapeHtml(a.push_name || a.phone || a.wa_id)}</div>
+          <div class="text-xs" style="color:var(--text-muted)">${escapeHtml(a.procedure_label || '')}</div>
+        </div>
+        <span class="badge badge-${apptBadgeClass(a.status)}">${APPT_STATUS_LABELS[a.status] || a.status}</span>
+        <div class="row-actions flex gap-1 flex-wrap">
+          ${a.status !== 'confirmed' && a.status !== 'attended' ? `<button class="action-btn" onclick="markAppt(${a.id},'confirmed')">Confirmar</button>` : ''}
+          ${a.status !== 'attended' ? `<button class="action-btn" onclick="markAppt(${a.id},'attended')">Compareceu</button>` : ''}
+          ${a.status !== 'no_show' ? `<button class="action-btn" onclick="markAppt(${a.id},'no_show')">Não compareceu</button>` : ''}
+          ${a.status !== 'canceled' ? `<button class="action-btn" onclick="markAppt(${a.id},'canceled')">Cancelar</button>` : ''}
+        </div>
+      </div>
+    `).join('');
+  }
+
+  async function markAppt(id, status) {
+    const res = await fetch('/api/appointments', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ client: currentClient, id, status }),
+    });
+    if (!res.ok) { alert('Erro ao atualizar consulta: ' + (await res.text())); return; }
+    loadCalendar();
+  }
+
+  // ---- Modal "Nova consulta" ----
+  let apptSelectedWaId = null;
+  let apptSearchTimer = null;
+  function openApptModal() {
+    apptSelectedWaId = null;
+    document.getElementById('appt-contact-search').value = '';
+    document.getElementById('appt-contact-picked').textContent = '';
+    document.getElementById('appt-contact-results').classList.add('hidden');
+    document.getElementById('appt-procedure').value = '';
+    document.getElementById('appt-error').classList.add('hidden');
+    // Pré-preenche com o dia selecionado no calendário, às 09:00.
+    const base = calendarSelectedDate ? calendarSelectedDate : ymdLocal(new Date());
+    document.getElementById('appt-datetime').value = `${base}T09:00`;
+    document.getElementById('appt-modal').classList.remove('hidden');
+  }
+  function closeApptModal() {
+    document.getElementById('appt-modal').classList.add('hidden');
+  }
+  function searchApptContact(q) {
+    clearTimeout(apptSearchTimer);
+    apptSelectedWaId = null;
+    const box = document.getElementById('appt-contact-results');
+    if (!q || q.trim().length < 2) { box.classList.add('hidden'); return; }
+    apptSearchTimer = setTimeout(async () => {
+      const res = await fetch(`/api/whatsapp-contacts?client=${encodeURIComponent(currentClient)}&search=${encodeURIComponent(q)}&limit=8`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const contacts = data.contacts || [];
+      if (!contacts.length) {
+        box.innerHTML = `<div class="dropdown-item" style="cursor:default">Nenhum contato encontrado</div>`;
+        box.classList.remove('hidden');
+        return;
+      }
+      box.innerHTML = contacts.map(c => `
+        <button class="dropdown-item" onclick='pickApptContact(${JSON.stringify(c.wa_id)}, ${JSON.stringify(c.push_name || c.phone)})'>
+          <span class="avatar avatar-sm" style="background:${avatarColor(c.wa_id)}">${escapeHtml(initials(c.push_name || c.phone))}</span>
+          <span class="flex-1 text-left truncate">${escapeHtml(c.push_name || '—')} <span class="mono text-xs" style="color:var(--text-muted)">${escapeHtml(c.phone)}</span></span>
+        </button>
+      `).join('');
+      box.classList.remove('hidden');
+    }, 250);
+  }
+  function pickApptContact(waId, label) {
+    apptSelectedWaId = waId;
+    document.getElementById('appt-contact-picked').textContent = `Selecionado: ${label}`;
+    document.getElementById('appt-contact-results').classList.add('hidden');
+  }
+  async function submitAppt() {
+    const errorEl = document.getElementById('appt-error');
+    errorEl.classList.add('hidden');
+    if (!apptSelectedWaId) {
+      errorEl.textContent = 'Busque e selecione um paciente na lista.';
+      errorEl.classList.remove('hidden');
+      return;
+    }
+    const dtValue = document.getElementById('appt-datetime').value;
+    if (!dtValue) {
+      errorEl.textContent = 'Escolha a data e a hora.';
+      errorEl.classList.remove('hidden');
+      return;
+    }
+    const scheduledAt = Math.floor(new Date(dtValue).getTime() / 1000);
+    const res = await fetch('/api/appointments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client: currentClient, wa_id: apptSelectedWaId, scheduled_at: scheduledAt,
+        procedure_label: document.getElementById('appt-procedure').value.trim() || null,
+      }),
+    });
+    if (!res.ok) {
+      errorEl.textContent = (await res.json().catch(() => ({}))).error || 'Não foi possível agendar.';
+      errorEl.classList.remove('hidden');
+      return;
+    }
+    closeApptModal();
+    calendarSelectedDate = ymdLocal(new Date(scheduledAt * 1000));
+    loadCalendar();
+  }
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#appt-contact-search') && !e.target.closest('#appt-contact-results')) {
+      document.getElementById('appt-contact-results')?.classList.add('hidden');
+    }
+  });
 
   const KEYWORD_STAGES = [
     { key: 'qualified', label: 'Qualificado' },
@@ -1868,6 +2376,76 @@
     }
   }
 
+  // ---- Usuários (Bloco B1, admin-only) ---------------------------------
+  async function loadUsers() {
+    // O seletor de cliente do formulário de "novo usuário" precisa da
+    // lista completa de clientes, não só o workspace atual.
+    const clientsRes = await fetch('/api/clients');
+    const clientsData = clientsRes.ok ? await clientsRes.json() : { clients: [] };
+    const select = document.getElementById('new-user-client');
+    select.innerHTML = (clientsData.clients || []).map(c => `<option value="${escapeHtml(c.slug)}">${escapeHtml(c.name)}</option>`).join('');
+
+    const res = await fetch('/api/users');
+    if (!res.ok) {
+      document.getElementById('users-list').innerHTML = errorLine('Não foi possível carregar os usuários: ' + await readError(res));
+      return;
+    }
+    const data = await res.json();
+    renderUsers(data.users || []);
+  }
+
+  function renderUsers(users) {
+    const list = document.getElementById('users-list');
+    list.innerHTML = users.map(u => `
+      <div class="rounded-lg p-3 text-sm flex items-center gap-3 border ${u.active ? '' : 'opacity-50'}">
+        <span class="avatar avatar-sm" style="background:${avatarColor(u.email)}">${escapeHtml(initials(u.name))}</span>
+        <div class="min-w-0 flex-1">
+          <div class="font-medium truncate">${escapeHtml(u.name)} <span class="text-xs mono" style="color:var(--text-muted)">${escapeHtml(u.email)}</span></div>
+          <div class="text-xs" style="color:var(--text-dim)">
+            ${u.role === 'admin' ? 'Admin · todos os clientes' : `Equipe · ${escapeHtml(u.client_name || '—')}`}
+            ${u.active ? '' : ' · desativado'}
+          </div>
+        </div>
+        ${u.active ? `<button class="action-btn" onclick="deactivateUser(${u.id})">Desativar</button>` : ''}
+      </div>
+    `).join('') || `<div class="text-xs" style="color:var(--text-muted)">Nenhum usuário cadastrado ainda.</div>`;
+  }
+
+  async function createUser() {
+    const errorEl = document.getElementById('new-user-error');
+    errorEl.classList.add('hidden');
+    const name = document.getElementById('new-user-name').value.trim();
+    const email = document.getElementById('new-user-email').value.trim();
+    const password = document.getElementById('new-user-password').value;
+    const role = document.getElementById('new-user-role').value;
+    const clientSlug = document.getElementById('new-user-client').value;
+
+    const body = { name, email, password, role };
+    if (role === 'team') body.client_slug = clientSlug;
+
+    const res = await fetch('/api/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      errorEl.textContent = (await res.json().catch(() => ({}))).error || 'Não foi possível criar o usuário.';
+      errorEl.classList.remove('hidden');
+      return;
+    }
+    document.getElementById('new-user-name').value = '';
+    document.getElementById('new-user-email').value = '';
+    document.getElementById('new-user-password').value = '';
+    loadUsers();
+  }
+
+  async function deactivateUser(id) {
+    if (!confirm('Desativar este usuário? Ele perde o acesso imediatamente.')) return;
+    const res = await fetch(`/api/users?id=${id}`, { method: 'DELETE' });
+    if (!res.ok) { alert('Erro ao desativar: ' + (await res.text())); return; }
+    loadUsers();
+  }
+
   // ---- Contact drawer -------------------------------------------------
   // One contact's whole story: how fast the client's team answered, which
   // ad it came from, every message, every stage change and what Meta
@@ -1983,6 +2561,19 @@
 
     blocks.push(`<div><div class="drawer-section-title">Origem</div>${renderOrigin(contact)}</div>`);
 
+    // Bloco A4/B5: nota livre por contato - fica vazia até loadContactNotes()
+    // responder (requisição separada, não vem no /api/whatsapp-contact).
+    blocks.push(`
+      <div>
+        <div class="drawer-section-title">Notas</div>
+        <div id="contact-notes-list" class="space-y-2 mb-2">${loadingLine('Carregando notas…')}</div>
+        <div class="flex gap-2">
+          <input type="text" id="contact-note-input" placeholder="Deixar uma nota…" class="input flex-1" onkeydown="if(event.key==='Enter') submitContactNote()">
+          <button class="action-btn" onclick="submitContactNote()">Salvar</button>
+        </div>
+      </div>
+    `);
+
     blocks.push(`
       <div>
         <div class="drawer-section-title">Conversa</div>
@@ -1991,6 +2582,40 @@
     `);
 
     document.getElementById('contact-body').innerHTML = blocks.join('');
+    loadContactNotes(contact.wa_id);
+  }
+
+  async function loadContactNotes(waId) {
+    const box = document.getElementById('contact-notes-list');
+    if (!box) return;
+    const res = await fetch(`/api/contact-notes?client=${encodeURIComponent(currentClient)}&wa_id=${encodeURIComponent(waId)}`);
+    if (openContactWaId !== waId) return;
+    if (!res.ok) { box.innerHTML = errorLine('Não foi possível carregar as notas.'); return; }
+    const data = await res.json();
+    if (openContactWaId !== waId) return;
+    const notes = data.notes || [];
+    box.innerHTML = notes.map(n => `
+      <div class="text-sm rounded-lg p-2" style="background:var(--surface-hover)">
+        <div>${escapeHtml(n.note)}</div>
+        <div class="text-xs mt-1" style="color:var(--text-muted)">${escapeHtml(n.user_name || 'Admin')} · ${fmtTime(n.created_at)}</div>
+      </div>
+    `).join('') || `<div class="text-xs" style="color:var(--text-muted)">Nenhuma nota ainda.</div>`;
+  }
+
+  async function submitContactNote() {
+    if (!openContactWaId) return;
+    const input = document.getElementById('contact-note-input');
+    const note = input.value.trim();
+    if (!note) return;
+    const waId = openContactWaId;
+    const res = await fetch('/api/contact-notes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ client: currentClient, wa_id: waId, note }),
+    });
+    if (!res.ok) { alert('Erro ao salvar nota: ' + (await res.text())); return; }
+    input.value = '';
+    loadContactNotes(waId);
   }
 
   const UTM_FIELD_LABELS = { utm_source: 'Origem', utm_medium: 'Meio', utm_campaign: 'Campanha', utm_content: 'Conteúdo', utm_term: 'Termo' };
