@@ -88,7 +88,7 @@ export async function onRequestPost(context) {
 
     const outcome = await applyStageTransition({
       env, client, waId: contact.wa_id, newStatus: 'sale', source: 'import',
-      value, currency: 'BRL', occurredAt: parseDate(row?.date, now),
+      value, currency: 'BRL', occurredAt: parseDate(row?.date, now), changedBy: session.userId,
     });
     if (!outcome.ok) {
       result.unmatched.push({ phone: row.phone, reason: outcome.error });

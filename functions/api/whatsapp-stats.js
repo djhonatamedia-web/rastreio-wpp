@@ -168,6 +168,15 @@ export async function onRequestGet(context) {
 
     const timeseries = buildTimeseries(leadsPerDay.results || [], stagesPerDay.results || []);
 
+    // Bloco A5: "média de crescimento" - mesma janela solicitada comparada
+    // com a janela imediatamente anterior, de igual duração (ex.: últimos
+    // 30 dias vs os 30 dias antes disso). `prevTo = from - 1` pra nunca
+    // sobrepor um segundo com a janela atual.
+    const windowSize = to - from;
+    const prevFrom = from - windowSize - 1;
+    const prevTo = from - 1;
+    const growth = await buildGrowth(env, client.id, { from, to }, { from: prevFrom, to: prevTo });
+
     return json({
       funnel: {
         ads: pickFunnel(funnelRows.results, 1),
@@ -179,10 +188,87 @@ export async function onRequestGet(context) {
       click_health: { total: clickHealthRow?.total || 0, matched: clickHealthRow?.matched || 0 },
       meta_coverage: { total: metaCoverageRow?.total || 0, with_id: metaCoverageRow?.with_id || 0 },
       revenue: { sales: salesTotal, total: revenueTotal, received: receivedTotal, pending: revenueTotal - receivedTotal, by_channel: revenueByChannel },
+      growth,
     });
   } catch (err) {
     return json({ error: err.message }, 500);
   }
+}
+
+// Bloco A5: funil + receita recebida + compareceu/não-compareceu (via
+// appointments, Bloco A2) pra janela atual e pra anterior, com a variação
+// percentual pronta pro card "Crescimento" da Visão Geral.
+async function buildGrowth(env, clientId, current, previous) {
+  const [curFunnel, prevFunnel, curRevenue, prevRevenue, curAppts, prevAppts] = await Promise.all([
+    growthFunnelRow(env, clientId, current),
+    growthFunnelRow(env, clientId, previous),
+    growthRevenueRow(env, clientId, current),
+    growthRevenueRow(env, clientId, previous),
+    growthAppointmentsRow(env, clientId, current),
+    growthAppointmentsRow(env, clientId, previous),
+  ]);
+
+  return {
+    leads: trend(curFunnel.total, prevFunnel.total),
+    qualified: trend(curFunnel.qualified, prevFunnel.qualified),
+    scheduled: trend(curFunnel.scheduled, prevFunnel.scheduled),
+    sale: trend(curFunnel.sale, prevFunnel.sale),
+    received: trend(curRevenue.received, prevRevenue.received),
+    attended: trend(curAppts.attended, prevAppts.attended),
+    no_show: trend(curAppts.no_show, prevAppts.no_show),
+  };
+}
+
+async function growthFunnelRow(env, clientId, { from, to }) {
+  const row = await env.DB.prepare(`
+    SELECT
+      COUNT(*) as total,
+      SUM(CASE WHEN status IN ('qualified','scheduled','sale') THEN 1 ELSE 0 END) as qualified,
+      SUM(CASE WHEN status IN ('scheduled','sale') THEN 1 ELSE 0 END) as scheduled,
+      SUM(CASE WHEN status = 'sale' THEN 1 ELSE 0 END) as sale
+    FROM whatsapp_contacts
+    WHERE client_id = ? AND created_at >= ? AND created_at <= ?
+  `).bind(clientId, from, to).first();
+  return { total: row?.total || 0, qualified: row?.qualified || 0, scheduled: row?.scheduled || 0, sale: row?.sale || 0 };
+}
+
+async function growthRevenueRow(env, clientId, { from, to }) {
+  const row = await env.DB.prepare(`
+    SELECT SUM(
+      CASE
+        WHEN e.payment_status = 'pending' THEN 0
+        WHEN e.payment_status = 'partial' THEN COALESCE(e.paid_amount, 0)
+        ELSE COALESCE(e.value, 0)
+      END
+    ) as received
+    FROM whatsapp_events e
+    WHERE e.id IN (
+        SELECT MAX(id) FROM whatsapp_events WHERE client_id = ? AND event_name = 'Purchase' GROUP BY wa_id
+      )
+      AND e.event_time >= ? AND e.event_time <= ?
+  `).bind(clientId, from, to).first();
+  return { received: row?.received || 0 };
+}
+
+async function growthAppointmentsRow(env, clientId, { from, to }) {
+  const row = await env.DB.prepare(`
+    SELECT
+      SUM(CASE WHEN status = 'attended' THEN 1 ELSE 0 END) as attended,
+      SUM(CASE WHEN status = 'no_show' THEN 1 ELSE 0 END) as no_show
+    FROM appointments
+    WHERE client_id = ? AND scheduled_at >= ? AND scheduled_at <= ?
+  `).bind(clientId, from, to).first();
+  return { attended: row?.attended || 0, no_show: row?.no_show || 0 };
+}
+
+// null em variation_pct = "sem base de comparação" (período anterior
+// zerado) - o frontend mostra "novo" em vez de uma % sem sentido (divisão
+// por zero), nunca Infinity/NaN.
+function trend(current, previous) {
+  let variationPct = null;
+  if (previous > 0) variationPct = Math.round(((current - previous) / previous) * 1000) / 10;
+  else if (current === 0) variationPct = 0;
+  return { current, previous, variation_pct: variationPct };
 }
 
 function pickFunnel(rows, isCtwa) {

@@ -8,6 +8,10 @@
 // "sale" - default 'paid' preserva o comportamento de sempre quando o
 // dash nao manda nada (ver applyStageTransition em stage-transition.js).
 //
+// assigned_to (Bloco A4, opcional): user id pra reatribuir o responsavel
+// pelo contato junto com a mudanca de estagio - precisa ser um usuario
+// ativo do MESMO cliente (ou um admin), senao 400.
+//
 // First mutating dashboard endpoint in this project (every other /api/*.js
 // here and in krob-tracking-stack-main is read-only). Auth goes in a header,
 // not the query string, specifically because this call changes state - a
@@ -39,7 +43,7 @@ export async function onRequestPost(context) {
     return json({ error: 'invalid JSON body' }, 400);
   }
 
-  const { client: clientSlug, wa_id, new_status, value, currency, payment_status, paid_amount } = body;
+  const { client: clientSlug, wa_id, new_status, value, currency, payment_status, paid_amount, assigned_to } = body;
   if (!wa_id || !new_status) {
     return json({ error: 'wa_id and new_status are required' }, 400);
   }
@@ -56,12 +60,31 @@ export async function onRequestPost(context) {
   }
   if (!assertClientAccess(session, client)) return jsonForbidden();
 
+  let assignedToId = null;
+  if (assigned_to !== undefined && assigned_to !== null) {
+    const assignee = await env.DB
+      .prepare('SELECT id, client_id, active FROM users WHERE id = ?')
+      .bind(assigned_to)
+      .first();
+    if (!assignee || !assignee.active || (assignee.client_id !== null && assignee.client_id !== client.id)) {
+      return json({ error: 'assigned_to inválido: usuário não existe, está desativado ou é de outro cliente' }, 400);
+    }
+    assignedToId = assignee.id;
+  }
+
   const result = await applyStageTransition({
     env, client, waId: wa_id, newStatus: new_status, source: 'manual', value, currency,
-    paymentStatus: payment_status, paidAmount: paid_amount,
+    paymentStatus: payment_status, paidAmount: paid_amount, changedBy: session.userId,
   });
   if (!result.ok) {
     return json({ error: result.error }, 404);
+  }
+
+  if (assigned_to !== undefined) {
+    await env.DB
+      .prepare('UPDATE whatsapp_contacts SET assigned_to = ? WHERE client_id = ? AND wa_id = ?')
+      .bind(assignedToId, client.id, wa_id)
+      .run();
   }
 
   return json({ ok: true, status: result.status, capi: result.capi });

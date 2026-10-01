@@ -80,6 +80,7 @@ ver seção "Autenticação" abaixo.
 | `functions/api/auth-me.js` | GET — quem está logado (nome, papel, cliente) |
 | `functions/api/users.js` | GET/POST/DELETE — aba "Usuários" (admin cria/desativa login de equipe) |
 | `functions/api/appointments.js` | GET/POST/PATCH — calendário: consulta com data/hora real, separada do status do funil |
+| `functions/api/contact-notes.js` | GET/POST — nota livre por contato, por cliente |
 | `functions/api/whatsapp-contacts.js` | GET — aba "Conversas" (lista) |
 | `functions/api/whatsapp-contact.js` | GET — painel de um contato: timeline, origem e tempo de resposta |
 | `functions/api/whatsapp-events.js` | GET — aba "Eventos" (log cru) |
@@ -93,7 +94,7 @@ ver seção "Autenticação" abaixo.
 | `functions/api/sales-import.js` | POST — importa fechamentos (telefone + valor + data), marca Venda e devolve a conversão (ver `docs/fechamentos.md`) |
 | `functions/api/channel-codes.js` | GET/POST/DELETE — aba "Configurações", canais fixos (bio/GMB) |
 | `config/whatsapp.js` | Mapas estágio→evento, status válidos, palavras-chave, Google Ads |
-| `migrations/0001-0011` | Schema D1, em ordem (ver nomes dos arquivos) |
+| `migrations/0001-0012` | Schema D1, em ordem (ver nomes dos arquivos) |
 | `dash/index.html` | Dashboard single-file (Tailwind CDN, sem build) |
 
 ## Deep reference
