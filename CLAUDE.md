@@ -94,7 +94,7 @@ ver seção "Autenticação" abaixo.
 | `functions/api/sales-import.js` | POST — importa fechamentos (telefone + valor + data), marca Venda e devolve a conversão (ver `docs/fechamentos.md`) |
 | `functions/api/channel-codes.js` | GET/POST/DELETE — aba "Configurações", canais fixos (bio/GMB) |
 | `config/whatsapp.js` | Mapas estágio→evento, status válidos, palavras-chave, Google Ads |
-| `migrations/0001-0012` | Schema D1, em ordem (ver nomes dos arquivos) |
+| `migrations/0001-0013` | Schema D1, em ordem (ver nomes dos arquivos) |
 | `dash/index.html` | Dashboard single-file (Tailwind CDN, sem build). Login por sessão (cookie), menu adapta por papel (`.admin-only`), abas Calendário/Usuários novas (Bloco B) |
 
 ## Deep reference
