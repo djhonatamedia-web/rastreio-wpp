@@ -161,6 +161,13 @@
   .calendar-chip-attended { background: var(--accent-soft); color: var(--accent-hover); }
   .calendar-chip-no_show, .calendar-chip-canceled { background: #fde8e8; color: var(--stage-lost-text); }
   .calendar-chip-confirmed { background: #fff6da; color: #92650a; }
+  @media (max-width: 640px) {
+    .calendar-weekdays, .calendar-days { gap: 0.2rem; }
+    .calendar-cell { min-height: 3.25rem; padding: 0.2rem; }
+    .calendar-daynum { font-size: 0.6875rem; }
+    .calendar-chip { display: none; } /* na tela estreita, o número do dia + o ponto já bastam pra abrir a lista */
+    .calendar-cell.calendar-has-appts::after { content: ''; display: block; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); margin: 0 auto; }
+  }
 
   /* Crescimento (Bloco A5/B6) */
   .growth-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 0.75rem; }
@@ -199,6 +206,7 @@
   .action-btn.active-range { background: var(--accent); color: var(--accent-contrast); border-color: var(--accent); }
   .btn-primary { background: var(--accent); color: var(--accent-contrast); border: none; border-radius: var(--radius-sm); padding: 0.5rem 0.875rem; font-size: 0.8125rem; font-weight: 600; cursor: pointer; font-family: inherit; }
   .btn-primary:hover { background: var(--accent-hover); }
+  .btn-primary:disabled, .action-btn:disabled { opacity: 0.55; cursor: not-allowed; pointer-events: none; }
 
   .row-hover:hover { background: var(--surface-hover); }
   .row-actions { display: flex; gap: 0.25rem; opacity: 0; transition: opacity 0.12s; }
@@ -752,7 +760,7 @@
                 <label class="text-xs block mb-1" style="color:var(--text-dim)">Cliente</label>
                 <select id="new-user-client" class="input"></select>
               </div>
-              <button class="btn-primary" onclick="createUser()">Criar</button>
+              <button class="btn-primary" id="new-user-submit-btn" onclick="createUser()">Criar</button>
             </div>
             <div id="new-user-error" class="text-xs mt-2 hidden" style="color:var(--stage-lost-text)"></div>
           </div>
@@ -838,7 +846,7 @@
         <input type="text" id="appt-procedure" placeholder="ex: Fios Aptos" class="input w-full">
       </div>
       <div id="appt-error" class="text-xs hidden" style="color:var(--stage-lost-text)"></div>
-      <button class="btn-primary w-full" onclick="submitAppt()">Agendar</button>
+      <button class="btn-primary w-full" id="appt-submit-btn" onclick="submitAppt()">Agendar</button>
     </div>
   </div>
 </div>
@@ -1685,7 +1693,16 @@
     loadCalendar();
   }
 
+  function renderCalendarSkeleton() {
+    const cells = Array.from({ length: 35 }, () => `<div class="calendar-cell"><div class="skeleton-bar" style="width:1.2rem;height:0.7rem;margin-bottom:0.3rem"></div><div class="skeleton-bar" style="height:0.6rem"></div></div>`).join('');
+    document.getElementById('calendar-grid').innerHTML = `
+      <div class="calendar-weekdays">${WEEKDAYS.map(w => `<div>${w}</div>`).join('')}</div>
+      <div class="calendar-days">${cells}</div>
+    `;
+  }
+
   async function loadCalendar() {
+    renderCalendarSkeleton();
     const monthStart = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
     const monthEnd = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0, 23, 59, 59);
     document.getElementById('calendar-label').textContent =
@@ -1734,7 +1751,7 @@
         </div>`).join('');
       const more = appts.length > 3 ? `<div class="text-[10px]" style="color:var(--text-muted)">+${appts.length - 3} mais</div>` : '';
       cells += `
-        <div class="calendar-cell ${dstr === todayStr ? 'calendar-cell-today' : ''} ${dstr === calendarSelectedDate ? 'calendar-cell-selected' : ''}" onclick="selectCalendarDay('${dstr}')">
+        <div class="calendar-cell ${dstr === todayStr ? 'calendar-cell-today' : ''} ${dstr === calendarSelectedDate ? 'calendar-cell-selected' : ''} ${appts.length ? 'calendar-has-appts' : ''}" onclick="selectCalendarDay('${dstr}')">
           <div class="calendar-daynum">${day}</div>
           ${chips}${more}
         </div>`;
@@ -1860,6 +1877,9 @@
       errorEl.classList.remove('hidden');
       return;
     }
+    const btn = document.getElementById('appt-submit-btn');
+    btn.disabled = true;
+    btn.textContent = 'Agendando…';
     const scheduledAt = Math.floor(new Date(dtValue).getTime() / 1000);
     const res = await fetch('/api/appointments', {
       method: 'POST',
@@ -1872,8 +1892,12 @@
     if (!res.ok) {
       errorEl.textContent = (await res.json().catch(() => ({}))).error || 'Não foi possível agendar.';
       errorEl.classList.remove('hidden');
+      btn.disabled = false;
+      btn.textContent = 'Agendar';
       return;
     }
+    btn.disabled = false;
+    btn.textContent = 'Agendar';
     closeApptModal();
     calendarSelectedDate = ymdLocal(new Date(scheduledAt * 1000));
     loadCalendar();
@@ -2423,11 +2447,16 @@
     const body = { name, email, password, role };
     if (role === 'team') body.client_slug = clientSlug;
 
+    const btn = document.getElementById('new-user-submit-btn');
+    btn.disabled = true;
+    btn.textContent = 'Criando…';
     const res = await fetch('/api/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
+    btn.disabled = false;
+    btn.textContent = 'Criar';
     if (!res.ok) {
       errorEl.textContent = (await res.json().catch(() => ({}))).error || 'Não foi possível criar o usuário.';
       errorEl.classList.remove('hidden');
