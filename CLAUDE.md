@@ -23,6 +23,14 @@ clientes (Tintim, CQC etc.), um dashboard com seletor de cliente no topo.
 Cada linha de cada tabela pertence a um `client_id` — ver
 `docs/multi-tenant.md`.
 
+**CRM, acesso por papel** (em construção desde 2026-10-01, Bloco A do
+plano): login de verdade (`users`, `functions/_shared/auth.js`) substituindo
+o `DASH_KEY` único da agência — admin (`role: 'admin'`, `client_id` null)
+enxerga qualquer cliente; equipe (`role: 'team'`) presa a 1 cliente, com
+o backend bloqueando qualquer outro `client` mesmo via URL/body editado na
+mão. `DASH_KEY` continua valendo como login de admin durante a transição —
+ver seção "Autenticação" abaixo.
+
 ## Regras (não violar)
 
 - **Nunca commitar secrets.** Só `wrangler.toml.example` é versionado.
@@ -45,6 +53,12 @@ Cada linha de cada tabela pertence a um `client_id` — ver
   — ficam em env var do Cloudflare prefixada pelo slug do cliente (ex.
   `TINTIM_META_ACCESS_TOKEN`), resolvidas por `getClientSecret()` — ver
   `docs/client-config.md` e `docs/multi-tenant.md`.
+- **Toda rota de API autentica via `requireSession()`** (`functions/_shared/auth.js`),
+  nunca comparando `DASH_KEY` solto de novo — ele já cobre o fallback pra
+  `DASH_KEY` legada. Rota com dado de 1 cliente só, depois de resolver o
+  `client`, SEMPRE chama `assertClientAccess(session, client)` antes de
+  tocar o banco — isso é o que impede uma conta de equipe de ler/escrever
+  outro tenant trocando o `?client=` na mão.
 
 ## Mapa de arquivos
 
@@ -60,6 +74,11 @@ Cada linha de cada tabela pertence a um `client_id` — ver
 | `functions/_shared/client-config.js` | IDs não-secretos por cliente, fallback D1 → env var |
 | `functions/_shared/clients.js` | `resolveClientBySlug`/`resolveClientByWebhookSlug`/`getClientSecret` |
 | `functions/_shared/hashing.js` | `sha256`/`normalizePhone`/`normalizeName` |
+| `functions/_shared/auth.js` | `requireSession()`/`assertClientAccess()` — ponto único de auth por papel (admin/equipe); fallback pra `DASH_KEY` |
+| `functions/api/auth-login.js` | POST — email+senha → cookie de sessão assinado |
+| `functions/api/auth-logout.js` | POST — limpa o cookie |
+| `functions/api/auth-me.js` | GET — quem está logado (nome, papel, cliente) |
+| `functions/api/users.js` | GET/POST/DELETE — aba "Usuários" (admin cria/desativa login de equipe) |
 | `functions/api/whatsapp-contacts.js` | GET — aba "Conversas" (lista) |
 | `functions/api/whatsapp-contact.js` | GET — painel de um contato: timeline, origem e tempo de resposta |
 | `functions/api/whatsapp-events.js` | GET — aba "Eventos" (log cru) |
@@ -73,7 +92,7 @@ Cada linha de cada tabela pertence a um `client_id` — ver
 | `functions/api/sales-import.js` | POST — importa fechamentos (telefone + valor + data), marca Venda e devolve a conversão (ver `docs/fechamentos.md`) |
 | `functions/api/channel-codes.js` | GET/POST/DELETE — aba "Configurações", canais fixos (bio/GMB) |
 | `config/whatsapp.js` | Mapas estágio→evento, status válidos, palavras-chave, Google Ads |
-| `migrations/0001-0009` | Schema D1, em ordem (ver nomes dos arquivos) |
+| `migrations/0001-0010` | Schema D1, em ordem (ver nomes dos arquivos) |
 | `dash/index.html` | Dashboard single-file (Tailwind CDN, sem build) |
 
 ## Deep reference

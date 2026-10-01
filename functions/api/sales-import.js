@@ -17,20 +17,21 @@
 // Capped per request: every row can fire two outbound calls, and Pages
 // Functions limits subrequests per invocation. The dashboard sends batches.
 
-import { timingSafeEqual } from '../webhook/_utils.js';
 import { applyStageTransition } from '../_shared/stage-transition.js';
 import { resolveClientBySlug } from '../_shared/clients.js';
 import { phoneMatchKey } from '../_shared/hashing.js';
+import { requireSession, jsonUnauthorized } from '../_shared/auth.js';
 
 const MAX_ROWS_PER_REQUEST = 25;
 
 export async function onRequestPost(context) {
   const { request, env } = context;
 
-  const providedKey = request.headers.get('x-dash-key') || '';
-  if (!env.DASH_KEY || !timingSafeEqual(providedKey, env.DASH_KEY)) {
-    return json({ error: 'Unauthorized' }, 401);
-  }
+  // Admin-only por enquanto - importacao em lote e ferramenta do admin;
+  // o dia a dia da equipe passa pela fila operacional (Bloco B do plano
+  // CRM), nao por planilha. Ver tabela Admin x Equipe do plano.
+  const session = await requireSession(request, env);
+  if (!session || session.role !== 'admin') return jsonUnauthorized();
 
   let body;
   try {

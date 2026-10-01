@@ -15,18 +15,16 @@
 // keyword-triggered path in functions/webhook/_whatsapp-core.js via
 // applyStageTransition().
 
-import { timingSafeEqual } from '../webhook/_utils.js';
 import { VALID_STATUSES } from '../../config/whatsapp.js';
 import { applyStageTransition } from '../_shared/stage-transition.js';
 import { resolveClientBySlug } from '../_shared/clients.js';
+import { requireSession, assertClientAccess, jsonUnauthorized, jsonForbidden } from '../_shared/auth.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
 
-  const providedKey = request.headers.get('x-dash-key') || '';
-  if (!env.DASH_KEY || !timingSafeEqual(providedKey, env.DASH_KEY)) {
-    return json({ error: 'Unauthorized' }, 401);
-  }
+  const session = await requireSession(request, env);
+  if (!session) return jsonUnauthorized();
 
   let body;
   try {
@@ -47,6 +45,7 @@ export async function onRequestPost(context) {
   if (!client) {
     return json({ error: 'client invalido ou nao informado' }, 400);
   }
+  if (!assertClientAccess(session, client)) return jsonForbidden();
 
   const result = await applyStageTransition({ env, client, waId: wa_id, newStatus: new_status, source: 'manual', value, currency });
   if (!result.ok) {

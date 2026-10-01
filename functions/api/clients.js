@@ -7,18 +7,15 @@
 // functions/_shared/clients.js, getClientSecret) - lowercase letters,
 // numbers and hyphens only, so it maps cleanly to an env var name.
 
-import { timingSafeEqual } from '../webhook/_utils.js';
+import { requireSession, jsonUnauthorized } from '../_shared/auth.js';
 
 const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/;
 
 export async function onRequestGet(context) {
   const { request, env } = context;
 
-  const url = new URL(request.url);
-  const key = url.searchParams.get('key');
-  if (!env.DASH_KEY || key !== env.DASH_KEY) {
-    return json({ error: 'Unauthorized' }, 401);
-  }
+  const session = await requireSession(request, env);
+  if (!session || session.role !== 'admin') return jsonUnauthorized();
 
   const rows = await env.DB
     .prepare('SELECT id, name, slug, webhook_slug, active, created_at FROM clients ORDER BY name')
@@ -30,10 +27,8 @@ export async function onRequestGet(context) {
 export async function onRequestPost(context) {
   const { request, env } = context;
 
-  const providedKey = request.headers.get('x-dash-key') || '';
-  if (!env.DASH_KEY || !timingSafeEqual(providedKey, env.DASH_KEY)) {
-    return json({ error: 'Unauthorized' }, 401);
-  }
+  const session = await requireSession(request, env);
+  if (!session || session.role !== 'admin') return jsonUnauthorized();
 
   let body;
   try {

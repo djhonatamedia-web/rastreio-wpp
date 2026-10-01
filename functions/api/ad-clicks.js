@@ -12,20 +12,20 @@
 // happened to notice one unattributed lead.
 
 import { resolveClientBySlug } from '../_shared/clients.js';
+import { requireSession, assertClientAccess, jsonUnauthorized, jsonForbidden } from '../_shared/auth.js';
 
 export async function onRequestGet(context) {
   const { request, env } = context;
 
-  const url = new URL(request.url);
-  const key = url.searchParams.get('key');
-  if (!env.DASH_KEY || key !== env.DASH_KEY) {
-    return json({ error: 'Unauthorized' }, 401);
-  }
+  const session = await requireSession(request, env);
+  if (!session) return jsonUnauthorized();
 
+  const url = new URL(request.url);
   const client = await resolveClientBySlug(env, url.searchParams.get('client'));
   if (!client) {
     return json({ error: 'client invalido ou nao informado' }, 400);
   }
+  if (!assertClientAccess(session, client)) return jsonForbidden();
 
   const unmatchedOnly = url.searchParams.get('unmatched') === '1';
   const limit = clampInt(url.searchParams.get('limit'), 50, 1, 500);

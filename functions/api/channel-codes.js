@@ -14,21 +14,25 @@
 // code is a dashboard action, not something a landing page calls per
 // visitor.
 
-import { timingSafeEqual } from '../webhook/_utils.js';
 import { resolveClientBySlug } from '../_shared/clients.js';
+import { requireSession, jsonUnauthorized } from '../_shared/auth.js';
 
 const VALID_CHANNELS = ['bio', 'gmb'];
 const CODE_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 
+// So admin mexe em canais fixos (aba Configuracoes - ver tabela Admin x
+// Equipe do plano CRM).
+async function requireAdmin(request, env) {
+  const session = await requireSession(request, env);
+  return session && session.role === 'admin' ? session : null;
+}
+
 export async function onRequestGet(context) {
   const { request, env } = context;
 
-  const url = new URL(request.url);
-  const key = url.searchParams.get('key');
-  if (!env.DASH_KEY || key !== env.DASH_KEY) {
-    return json({ error: 'Unauthorized' }, 401);
-  }
+  if (!(await requireAdmin(request, env))) return jsonUnauthorized();
 
+  const url = new URL(request.url);
   const client = await resolveClientBySlug(env, url.searchParams.get('client'));
   if (!client) {
     return json({ error: 'client invalido ou nao informado' }, 400);
@@ -45,10 +49,7 @@ export async function onRequestGet(context) {
 export async function onRequestPost(context) {
   const { request, env } = context;
 
-  const providedKey = request.headers.get('x-dash-key') || '';
-  if (!env.DASH_KEY || !timingSafeEqual(providedKey, env.DASH_KEY)) {
-    return json({ error: 'Unauthorized' }, 401);
-  }
+  if (!(await requireAdmin(request, env))) return jsonUnauthorized();
 
   let body;
   try {
@@ -93,10 +94,7 @@ export async function onRequestPost(context) {
 export async function onRequestDelete(context) {
   const { request, env } = context;
 
-  const providedKey = request.headers.get('x-dash-key') || '';
-  if (!env.DASH_KEY || !timingSafeEqual(providedKey, env.DASH_KEY)) {
-    return json({ error: 'Unauthorized' }, 401);
-  }
+  if (!(await requireAdmin(request, env))) return jsonUnauthorized();
 
   let body;
   try {

@@ -17,6 +17,7 @@
 // payload for anyone who needs it.
 
 import { resolveClientBySlug } from '../_shared/clients.js';
+import { requireSession, assertClientAccess, jsonUnauthorized, jsonForbidden } from '../_shared/auth.js';
 
 // Stage events (written by applyStageTransition / sendFirstTouchLead)
 // versus the raw message log - same table, told apart by event_name.
@@ -25,16 +26,15 @@ const MESSAGE_EVENT_NAMES = new Set(['message_received', 'unrecognized_webhook']
 export async function onRequestGet(context) {
   const { request, env } = context;
 
-  const url = new URL(request.url);
-  const key = url.searchParams.get('key');
-  if (!env.DASH_KEY || key !== env.DASH_KEY) {
-    return json({ error: 'Unauthorized' }, 401);
-  }
+  const session = await requireSession(request, env);
+  if (!session) return jsonUnauthorized();
 
+  const url = new URL(request.url);
   const client = await resolveClientBySlug(env, url.searchParams.get('client'));
   if (!client) {
     return json({ error: 'client invalido ou nao informado' }, 400);
   }
+  if (!assertClientAccess(session, client)) return jsonForbidden();
 
   const waId = url.searchParams.get('wa_id');
   if (!waId) {
