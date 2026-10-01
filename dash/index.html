@@ -169,6 +169,44 @@
     .calendar-cell.calendar-has-appts::after { content: ''; display: block; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); margin: 0 auto; }
   }
 
+  /* Funil visual / kanban (Bloco D1) */
+  .kanban-board { display: grid; grid-template-columns: repeat(4, minmax(15rem, 1fr)); gap: 0.75rem; align-items: start; }
+  .kanban-column {
+    background: var(--surface-hover); border-radius: var(--radius-md);
+    padding: 0.625rem; display: flex; flex-direction: column; gap: 0.5rem;
+    min-height: 3rem;
+  }
+  .kanban-column.drag-over { outline: 2px dashed var(--accent); outline-offset: -2px; }
+  .kanban-column-header { display: flex; align-items: center; justify-content: space-between; padding: 0.125rem 0.25rem 0.375rem; }
+  .kanban-column-title { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-dim); }
+  .kanban-column-count { font-size: 0.6875rem; font-weight: 600; color: var(--text-muted); background: var(--surface); border-radius: 100px; padding: 0.0625rem 0.4375rem; }
+  .kanban-cards { display: flex; flex-direction: column; gap: 0.5rem; min-height: 2rem; }
+  .kanban-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
+    padding: 0.625rem; cursor: grab; display: flex; flex-direction: column; gap: 0.375rem;
+  }
+  .kanban-card:hover { border-color: var(--border-strong); box-shadow: var(--shadow-sm); }
+  .kanban-card.dragging { opacity: 0.4; }
+  .kanban-card-top { display: flex; align-items: center; gap: 0.5rem; }
+  .kanban-card-name { font-size: 0.8125rem; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+  .kanban-card-phone { font-size: 0.6875rem; color: var(--text-muted); }
+  .kanban-card-meta { display: flex; align-items: center; gap: 0.375rem; flex-wrap: wrap; }
+  .kanban-card-badge {
+    font-size: 0.625rem; font-weight: 600; padding: 0.0625rem 0.375rem; border-radius: 100px;
+    background: var(--accent-soft); color: var(--accent-hover);
+  }
+  .kanban-card-attend { font-size: 0.625rem; font-weight: 700; padding: 0.0625rem 0.375rem; border-radius: 100px; }
+  .kanban-card-attend-attended { background: var(--accent-soft); color: var(--accent-hover); }
+  .kanban-card-attend-no_show { background: #fde8e8; color: var(--stage-lost-text); }
+  .kanban-card-attend-waiting { background: var(--surface-hover); color: var(--text-muted); }
+  .kanban-card-value { font-size: 0.75rem; font-weight: 700; color: var(--chart-sale); }
+  .kanban-card-stale { font-size: 0.625rem; color: var(--text-muted); }
+  .kanban-card-actions { display: flex; gap: 0.3rem; }
+  .kanban-card-actions .action-btn { padding: 0.2rem 0.4rem; font-size: 0.6875rem; }
+  @media (max-width: 1023px) {
+    .kanban-board { grid-template-columns: 1fr; }
+  }
+
   /* Crescimento (Bloco A5/B6) */
   .growth-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 0.75rem; }
   .growth-tile { background: var(--surface-hover); border-radius: var(--radius-md); padding: 0.75rem; }
@@ -484,7 +522,27 @@
         <section id="tab-conversas" class="fade-in hidden space-y-4">
           <div class="kpi-grid" id="status-counts"></div>
 
-          <div class="card p-4">
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <div class="flex gap-1">
+              <button class="action-btn active-range" id="conversas-view-kanban-btn" onclick="setConversasView('kanban')">Funil</button>
+              <button class="action-btn" id="conversas-view-list-btn" onclick="setConversasView('list')">Lista</button>
+            </div>
+            <button class="btn-primary" onclick="openLeadModal()">
+              <svg class="icon"><use href="#icon-plus"/></svg> Novo lead
+            </button>
+          </div>
+
+          <!-- Funil visual (kanban) - Bloco D1 -->
+          <div id="conversas-kanban-view">
+            <div id="kanban-board" class="kanban-board"></div>
+            <button class="action-btn mt-2" onclick="toggleLostColumn()">
+              <span id="kanban-lost-toggle-label">Ver perdidos</span>
+            </button>
+            <div id="kanban-lost-column" class="kanban-column hidden mt-2" style="max-width:20rem"></div>
+          </div>
+
+          <!-- Lista (filtros detalhados) - formato original -->
+          <div id="conversas-list-view" class="hidden card p-4">
             <div class="flex items-center gap-3 mb-3 flex-wrap">
               <input id="conversas-search" type="text" placeholder="Buscar por telefone" class="input flex-1 max-w-xs">
               <label class="flex items-center gap-2 text-sm" style="color:var(--text-dim)">
@@ -808,6 +866,7 @@
     <button class="action-btn" onclick="contactAction('scheduled')">Agendado</button>
     <button class="action-btn" onclick="contactAction('sale')">Venda</button>
     <button class="action-btn" onclick="contactAction('lost')">Perdido</button>
+    <button class="action-btn" onclick="openApptModalFromDrawer()">Agendar</button>
     <span class="text-[10px] ml-auto self-center" style="color:var(--text-muted)">J / K navega · Esc fecha</span>
   </div>
 </aside>
@@ -876,6 +935,60 @@
         <input type="text" id="sale-paid-amount" placeholder="0,00" class="input w-full">
       </div>
       <button class="btn-primary w-full" onclick="submitSale()">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Novo lead manual (Bloco D1) -->
+<div id="lead-modal" class="hidden fixed inset-0 flex items-center justify-center p-4 z-50" style="background: rgba(10,12,16,0.5)" onclick="if(event.target===this) closeLeadModal()">
+  <div class="card p-5 w-full max-w-sm" style="box-shadow: var(--shadow-md)">
+    <div class="flex items-center justify-between mb-3">
+      <div class="font-semibold">Novo lead</div>
+      <button class="icon-btn" onclick="closeLeadModal()"><svg class="icon"><use href="#icon-x"/></svg></button>
+    </div>
+    <div class="space-y-3">
+      <div>
+        <label class="text-xs block mb-1" style="color:var(--text-dim)">Nome</label>
+        <input type="text" id="lead-name" placeholder="Nome do paciente" class="input w-full">
+      </div>
+      <div>
+        <label class="text-xs block mb-1" style="color:var(--text-dim)">WhatsApp</label>
+        <input type="tel" id="lead-phone" placeholder="(48) 99999-9999" class="input w-full">
+      </div>
+      <div>
+        <label class="text-xs block mb-1" style="color:var(--text-dim)">Como chegou</label>
+        <select id="lead-origin" class="input w-full">
+          <option value="indicacao">Indicação</option>
+          <option value="ligacao">Ligação</option>
+          <option value="walkin">Walk-in</option>
+          <option value="outro">Outro</option>
+        </select>
+      </div>
+      <div id="lead-error" class="text-xs hidden" style="color:var(--stage-lost-text)"></div>
+      <button class="btn-primary w-full" id="lead-submit-btn" onclick="submitLead()">Criar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Motivo da perda (Bloco C3/D1) -->
+<div id="lost-modal" class="hidden fixed inset-0 flex items-center justify-center p-4 z-50" style="background: rgba(10,12,16,0.5)" onclick="if(event.target===this) closeLostModal()">
+  <div class="card p-5 w-full max-w-sm" style="box-shadow: var(--shadow-md)">
+    <div class="flex items-center justify-between mb-3">
+      <div class="font-semibold">Marcar como Perdido</div>
+      <button class="icon-btn" onclick="closeLostModal()"><svg class="icon"><use href="#icon-x"/></svg></button>
+    </div>
+    <div class="space-y-3">
+      <div>
+        <label class="text-xs block mb-1" style="color:var(--text-dim)">Motivo</label>
+        <select id="lost-reason" class="input w-full">
+          <option value="Preço">Preço</option>
+          <option value="Sem resposta">Sem resposta</option>
+          <option value="Escolheu concorrente">Escolheu concorrente</option>
+          <option value="Não é o público">Não é o público</option>
+          <option value="Outro">Outro</option>
+        </select>
+      </div>
+      <button class="btn-primary w-full" onclick="submitLost()">Confirmar</button>
     </div>
   </div>
 </div>
@@ -1069,6 +1182,7 @@
 
     loadStats();
     loadContacts();
+    loadKanban();
     loadEvents();
     // ...and whatever tab is actually on screen, which is what used to be
     // missing: staying on "Configuracoes" or "Palavras-chave" while
@@ -1093,6 +1207,7 @@
       pill.classList.add('switch-flash');
     }
     renderSkeletonRows('conversas-body', 7);
+    document.getElementById('kanban-board').innerHTML = KANBAN_STATUSES.map(s => `<div class="kanban-column"><div class="kanban-column-header"><span class="kanban-column-title">${KANBAN_LABELS[s]}</span></div><div class="skeleton-bar" style="height:3rem"></div></div>`).join('');
     renderSkeletonRows('eventos-body', 7);
     renderSkeletonRows('by-ad-body', 5);
     renderSkeletonRows('by-channel-body', 5);
@@ -1156,6 +1271,7 @@
     document.querySelectorAll('.nav-item').forEach(t => t.classList.toggle('active', t.dataset.tab === target));
     ALL_TABS.forEach(t => document.getElementById('tab-' + t).classList.toggle('hidden', t !== target));
     document.getElementById('page-title').textContent = TAB_TITLES[target] || '';
+    if (target === 'conversas') loadKanban();
     if (target === 'keywords') loadKeywords();
     if (target === 'config') { loadConfig(); loadClientStatus(); loadChannelCodes(); loadAdClicks(); }
     if (target === 'clientes') loadClientsAdmin();
@@ -1169,14 +1285,21 @@
 
   document.getElementById('auto-refresh').addEventListener('change', (e) => {
     if (e.target.checked) {
-      autoRefreshTimer = setInterval(() => { loadStats(); loadContacts(); loadEvents(); }, 10000);
+      autoRefreshTimer = setInterval(() => { loadStats(); loadContacts(); loadKanban(); loadEvents(); }, 10000);
     } else {
       clearInterval(autoRefreshTimer);
     }
   });
 
   const STATUS_LABELS = { lead: 'Lead', qualified: 'Qualificado', scheduled: 'Agendado', sale: 'Venda', lost: 'Perdido' };
-  const AD_PLATFORM_LABELS = { google: 'Google Ads', bio: 'Link na Bio', gmb: 'Google Meu Negócio', meta_site: 'Meta Ads (site)' };
+  const AD_PLATFORM_LABELS = {
+    google: 'Google Ads', bio: 'Link na Bio', gmb: 'Google Meu Negócio', meta_site: 'Meta Ads (site)',
+    // Origens de lead manual (Bloco C2) - mesmo mapa, sem precisar de relatório novo.
+    indicacao: 'Indicação', ligacao: 'Ligação', walkin: 'Walk-in', outro: 'Outro',
+  };
+  const MANUAL_ORIGIN_LABELS = { indicacao: 'Indicação', ligacao: 'Ligação', walkin: 'Walk-in', outro: 'Outro' };
+  const KANBAN_STATUSES = ['lead', 'qualified', 'scheduled', 'sale'];
+  const KANBAN_LABELS = { lead: 'Lead', qualified: 'Qualificado', scheduled: 'Agendado', sale: 'Venda' };
   const STATUS_ICONS = { lead: 'users', qualified: 'check', scheduled: 'calendar', sale: 'dollar', lost: 'x' };
   let currentEventsRaw = [];
   let evolutionChart = null;
@@ -1633,6 +1756,7 @@
     }
     loadContacts();
     loadStats(); // receita/crescimento mudam quando uma venda é marcada
+    if (currentTab === 'conversas') loadKanban();
     // The drawer shows the stage badge and the CAPI result of each send,
     // so it has to re-read after an action taken from either place.
     if (openContactWaId === waId) openContact(waId);
@@ -1667,6 +1791,228 @@
     const waId = saleModalWaId;
     closeSaleModal();
     markStatus(waId, 'sale', value, 'BRL', { payment_status: paymentStatus, paid_amount: paidAmount });
+  }
+
+  // ===== Marcar Perdido com motivo (Bloco C3/D1) =====
+  let lostModalWaId = null;
+  function markLost(waId) {
+    lostModalWaId = waId;
+    document.getElementById('lost-reason').value = 'Preço';
+    document.getElementById('lost-modal').classList.remove('hidden');
+  }
+  function closeLostModal() {
+    lostModalWaId = null;
+    document.getElementById('lost-modal').classList.add('hidden');
+  }
+  function submitLost() {
+    if (!lostModalWaId) return;
+    const reason = document.getElementById('lost-reason').value;
+    const waId = lostModalWaId;
+    closeLostModal();
+    markStatus(waId, 'lost', null, null, { lost_reason: reason });
+  }
+
+  // ===== Novo lead manual (Bloco C2/D1) =====
+  function openLeadModal() {
+    document.getElementById('lead-name').value = '';
+    document.getElementById('lead-phone').value = '';
+    document.getElementById('lead-origin').value = 'indicacao';
+    document.getElementById('lead-error').classList.add('hidden');
+    document.getElementById('lead-modal').classList.remove('hidden');
+  }
+  function closeLeadModal() {
+    document.getElementById('lead-modal').classList.add('hidden');
+  }
+  async function submitLead() {
+    const errorEl = document.getElementById('lead-error');
+    errorEl.classList.add('hidden');
+    const name = document.getElementById('lead-name').value.trim();
+    const phone = document.getElementById('lead-phone').value.trim();
+    const origin = document.getElementById('lead-origin').value;
+    if (!name || !phone) {
+      errorEl.textContent = 'Nome e WhatsApp são obrigatórios.';
+      errorEl.classList.remove('hidden');
+      return;
+    }
+    const btn = document.getElementById('lead-submit-btn');
+    btn.disabled = true;
+    btn.textContent = 'Criando…';
+    const res = await fetch('/api/whatsapp-contacts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ client: currentClient, name, phone, origin }),
+    });
+    btn.disabled = false;
+    btn.textContent = 'Criar';
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      // 409 (telefone já cadastrado) devolve o wa_id existente - vale
+      // mostrar isso em vez de só "erro genérico".
+      errorEl.textContent = body.error ? `${body.error}${body.status ? ' (status: ' + (STATUS_LABELS[body.status] || body.status) + ')' : ''}` : 'Não foi possível criar o lead.';
+      errorEl.classList.remove('hidden');
+      return;
+    }
+    closeLeadModal();
+    loadKanban();
+    loadContacts();
+  }
+
+  // ===== Funil visual / kanban (Bloco D1) =====
+  let kanbanContacts = [];
+  let kanbanAppointmentsByWaId = {};
+  let kanbanDraggedWaId = null;
+  let showLostColumn = false;
+
+  function setConversasView(view) {
+    document.getElementById('conversas-kanban-view').classList.toggle('hidden', view !== 'kanban');
+    document.getElementById('conversas-list-view').classList.toggle('hidden', view !== 'list');
+    document.getElementById('conversas-view-kanban-btn').classList.toggle('active-range', view === 'kanban');
+    document.getElementById('conversas-view-list-btn').classList.toggle('active-range', view === 'list');
+    localStorage.setItem('conversasView', view);
+    if (view === 'kanban') loadKanban();
+    else loadContacts();
+  }
+
+  async function loadKanban() {
+    if (currentTab !== 'conversas' && currentTab !== undefined) {
+      // ainda carrega em background pra ficar pronto quando o usuario trocar
+      // de aba, mas sem bloquear - segue mesmo assim, é so um fetch leve.
+    }
+    const epoch = clientEpoch;
+    const res = await fetch(`/api/whatsapp-contacts?client=${encodeURIComponent(currentClient)}&limit=500`);
+    if (epoch !== clientEpoch) return;
+    if (!res.ok) {
+      document.getElementById('kanban-board').innerHTML = errorLine('Não foi possível carregar o funil: ' + await readError(res));
+      return;
+    }
+    const data = await res.json();
+    if (epoch !== clientEpoch) return;
+    kanbanContacts = data.contacts || [];
+
+    // Janela ampla (6 meses pra trás e pra frente) só pra montar o selo de
+    // compareceu/não-compareceu na coluna Agendado - não precisa ser exata.
+    const now = Math.floor(Date.now() / 1000);
+    kanbanAppointmentsByWaId = {};
+    const apptRes = await fetch(`/api/appointments?client=${encodeURIComponent(currentClient)}&from=${now - 180 * 86400}&to=${now + 180 * 86400}`);
+    if (apptRes.ok) {
+      const apptData = await apptRes.json();
+      for (const a of (apptData.appointments || [])) {
+        const prev = kanbanAppointmentsByWaId[a.wa_id];
+        if (!prev || a.scheduled_at > prev.scheduled_at) kanbanAppointmentsByWaId[a.wa_id] = a;
+      }
+    }
+    if (epoch !== clientEpoch) return;
+    renderKanban();
+  }
+
+  function renderKanban() {
+    const board = document.getElementById('kanban-board');
+    board.innerHTML = KANBAN_STATUSES.map(status => {
+      const cards = kanbanContacts.filter(c => c.status === status);
+      return `
+        <div class="kanban-column" data-status="${status}" ondragover="kanbanDragOver(event)" ondragleave="kanbanDragLeave(event)" ondrop="kanbanDrop(event,'${status}')">
+          <div class="kanban-column-header">
+            <span class="kanban-column-title">${KANBAN_LABELS[status]}</span>
+            <span class="kanban-column-count">${cards.length}</span>
+          </div>
+          <div class="kanban-cards">
+            ${cards.map(renderKanbanCard).join('') || `<div class="text-xs" style="color:var(--text-muted)">Nenhum lead aqui.</div>`}
+          </div>
+        </div>
+      `;
+    }).join('');
+    renderLostColumn();
+  }
+
+  function renderLostColumn() {
+    const lostCards = kanbanContacts.filter(c => c.status === 'lost');
+    document.getElementById('kanban-lost-toggle-label').textContent = showLostColumn ? 'Esconder perdidos' : `Ver perdidos (${lostCards.length})`;
+    const col = document.getElementById('kanban-lost-column');
+    col.classList.toggle('hidden', !showLostColumn);
+    if (showLostColumn) {
+      col.innerHTML = `
+        <div class="kanban-column-header"><span class="kanban-column-title">Perdido</span><span class="kanban-column-count">${lostCards.length}</span></div>
+        <div class="kanban-cards">${lostCards.map(renderKanbanCard).join('') || `<div class="text-xs" style="color:var(--text-muted)">Nenhum lead perdido no momento.</div>`}</div>
+      `;
+    }
+  }
+  function toggleLostColumn() {
+    showLostColumn = !showLostColumn;
+    renderLostColumn();
+  }
+
+  function kanbanOriginLabel(c) {
+    if (c.is_ctwa) return 'Meta';
+    if (c.ad_platform) return AD_PLATFORM_LABELS[c.ad_platform] || c.ad_platform;
+    return 'Orgânico';
+  }
+
+  function renderKanbanCard(c) {
+    const name = c.push_name || c.phone;
+    const staleDays = Math.floor((Date.now() / 1000 - (c.status_updated_at || c.created_at)) / 86400);
+
+    let attendBadge = '';
+    if (c.status === 'scheduled') {
+      const appt = kanbanAppointmentsByWaId[c.wa_id];
+      if (appt) {
+        if (appt.status === 'attended') attendBadge = `<span class="kanban-card-attend kanban-card-attend-attended">Compareceu</span>`;
+        else if (appt.status === 'no_show') attendBadge = `<span class="kanban-card-attend kanban-card-attend-no_show">Não compareceu</span>`;
+        else if (appt.status !== 'canceled') attendBadge = `<span class="kanban-card-attend kanban-card-attend-waiting">Aguardando</span>`;
+      }
+    }
+
+    const lostActionBtn = c.status !== 'lost' ? `<button class="action-btn" onclick="event.stopPropagation(); markLost('${c.wa_id}')" title="Marcar como perdido">✕</button>` : '';
+
+    return `
+      <div class="kanban-card" draggable="true" ondragstart="kanbanDragStart(event,'${c.wa_id}')" ondragend="kanbanDragEnd(event)" onclick="openContact('${c.wa_id}')">
+        <div class="kanban-card-top">
+          <span class="avatar avatar-sm" style="background:${avatarColor(c.wa_id)}">${escapeHtml(initials(name))}</span>
+          <div class="min-w-0 flex-1">
+            <div class="kanban-card-name">${escapeHtml(name)}</div>
+            <div class="kanban-card-phone mono">${escapeHtml(c.phone)}</div>
+          </div>
+        </div>
+        <div class="kanban-card-meta">
+          <span class="kanban-card-badge">${escapeHtml(kanbanOriginLabel(c))}</span>
+          ${attendBadge}
+          ${!c.ctwa_clid && c.is_ctwa ? '<span class="kanban-card-attend kanban-card-attend-no_show" title="O WhatsApp não entregou o ctwa_clid: não volta pro Meta">sem clid</span>' : ''}
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="kanban-card-stale">${staleDays}d parado</span>
+          <div class="kanban-card-actions">
+            <button class="action-btn" onclick='event.stopPropagation(); openApptModalFor("${c.wa_id}", ${JSON.stringify(escapeHtml(name))})' title="Agendar consulta">Agendar</button>
+            ${lostActionBtn}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function kanbanDragStart(ev, waId) {
+    kanbanDraggedWaId = waId;
+    ev.target.classList.add('dragging');
+    ev.dataTransfer.effectAllowed = 'move';
+  }
+  function kanbanDragEnd(ev) {
+    ev.target.classList.remove('dragging');
+  }
+  function kanbanDragOver(ev) {
+    ev.preventDefault();
+    ev.currentTarget.classList.add('drag-over');
+  }
+  function kanbanDragLeave(ev) {
+    ev.currentTarget.classList.remove('drag-over');
+  }
+  function kanbanDrop(ev, newStatus) {
+    ev.preventDefault();
+    ev.currentTarget.classList.remove('drag-over');
+    const waId = kanbanDraggedWaId;
+    kanbanDraggedWaId = null;
+    if (!waId) return;
+    const contact = kanbanContacts.find(c => c.wa_id === waId);
+    if (!contact || contact.status === newStatus) return;
+    if (newStatus === 'sale') { markSale(waId); return; }
+    markStatus(waId, newStatus);
   }
 
   // ===== Calendário (Bloco B2) =====
@@ -1833,6 +2179,18 @@
   }
   function closeApptModal() {
     document.getElementById('appt-modal').classList.add('hidden');
+    document.getElementById('appt-contact-search').disabled = false;
+  }
+
+  // Bloco D2: "Agendar" direto do card/drawer - pula a busca, o contato já
+  // está escolhido.
+  function openApptModalFor(waId, label) {
+    openApptModal();
+    apptSelectedWaId = waId;
+    const search = document.getElementById('appt-contact-search');
+    search.value = label;
+    search.disabled = true;
+    document.getElementById('appt-contact-picked').textContent = `Selecionado: ${label}`;
   }
   function searchApptContact(q) {
     clearTimeout(apptSearchTimer);
@@ -1850,7 +2208,7 @@
         return;
       }
       box.innerHTML = contacts.map(c => `
-        <button class="dropdown-item" onclick='pickApptContact(${JSON.stringify(c.wa_id)}, ${JSON.stringify(c.push_name || c.phone)})'>
+        <button class="dropdown-item" onclick='pickApptContact(${JSON.stringify(c.wa_id)}, ${JSON.stringify(escapeHtml(c.push_name || c.phone))})'>
           <span class="avatar avatar-sm" style="background:${avatarColor(c.wa_id)}">${escapeHtml(initials(c.push_name || c.phone))}</span>
           <span class="flex-1 text-left truncate">${escapeHtml(c.push_name || '—')} <span class="mono text-xs" style="color:var(--text-muted)">${escapeHtml(c.phone)}</span></span>
         </button>
@@ -2543,7 +2901,14 @@
   function contactAction(status) {
     if (!openContactWaId) return;
     if (status === 'sale') markSale(openContactWaId);
+    else if (status === 'lost') markLost(openContactWaId);
     else markStatus(openContactWaId, status);
+  }
+
+  function openApptModalFromDrawer() {
+    if (!openContactWaId) return;
+    const name = document.getElementById('contact-name').textContent;
+    openApptModalFor(openContactWaId, name);
   }
 
   // J/K walks the list underneath without closing the panel - the reason
@@ -2564,7 +2929,7 @@
     if (e.key === 'k' || e.key === 'K') { e.preventDefault(); stepContact(-1); }
   });
 
-  function renderContact({ contact, timeline, timings }) {
+  function renderContact({ contact, timeline, timings, next_appointment }) {
     document.getElementById('contact-avatar').textContent = initials(contact.push_name || contact.phone);
     document.getElementById('contact-avatar').style.background = avatarColor(contact.wa_id);
     document.getElementById('contact-name').textContent = contact.push_name || 'Sem nome';
@@ -2573,6 +2938,34 @@
       `<span class="badge badge-${contact.status}">${STATUS_LABELS[contact.status] || contact.status}</span>`;
 
     const blocks = [];
+
+    // Bloco C4/D2: próxima consulta, sem precisar trocar pra aba Calendário.
+    if (next_appointment) {
+      const apptDate = new Date(next_appointment.scheduled_at * 1000).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+      blocks.push(`
+        <div class="callout">
+          <svg class="icon"><use href="#icon-calendar"/></svg>
+          <div>Próxima consulta: <b>${apptDate}</b>${next_appointment.procedure_label ? ` — ${escapeHtml(next_appointment.procedure_label)}` : ''}</div>
+        </div>
+      `);
+    }
+
+    // Bloco C1/D3: ficha do paciente - os 5 campos que apareceram em todo
+    // concorrente de clínica pesquisado. Um "Salvar" só, atualização parcial.
+    blocks.push(`
+      <div>
+        <div class="drawer-section-title">Dados do paciente</div>
+        <div class="grid grid-cols-2 gap-2">
+          <div><label class="text-xs block mb-1" style="color:var(--text-dim)">Convênio</label><input type="text" id="field-insurance" class="input w-full" value="${escapeHtml(contact.insurance || '')}"></div>
+          <div><label class="text-xs block mb-1" style="color:var(--text-dim)">Procedimento de interesse</label><input type="text" id="field-interest" class="input w-full" value="${escapeHtml(contact.interest || '')}"></div>
+          <div><label class="text-xs block mb-1" style="color:var(--text-dim)">Nascimento</label><input type="date" id="field-birth_date" class="input w-full" value="${escapeHtml(contact.birth_date || '')}"></div>
+          <div><label class="text-xs block mb-1" style="color:var(--text-dim)">CPF</label><input type="text" id="field-cpf" class="input w-full" value="${escapeHtml(contact.cpf || '')}"></div>
+          <div class="col-span-2"><label class="text-xs block mb-1" style="color:var(--text-dim)">Endereço</label><input type="text" id="field-address" class="input w-full" value="${escapeHtml(contact.address || '')}"></div>
+        </div>
+        <button class="action-btn mt-2" onclick="saveContactFields('${contact.wa_id}')">Salvar ficha</button>
+        <span id="contact-fields-saved" class="text-xs ml-2 hidden" style="color:var(--accent)">Salvo ✓</span>
+      </div>
+    `);
 
     blocks.push(`
       <div>
@@ -2612,6 +3005,26 @@
 
     document.getElementById('contact-body').innerHTML = blocks.join('');
     loadContactNotes(contact.wa_id);
+  }
+
+  async function saveContactFields(waId) {
+    const body = {
+      client: currentClient, wa_id: waId,
+      insurance: document.getElementById('field-insurance').value,
+      interest: document.getElementById('field-interest').value,
+      birth_date: document.getElementById('field-birth_date').value || null,
+      cpf: document.getElementById('field-cpf').value,
+      address: document.getElementById('field-address').value,
+    };
+    const res = await fetch('/api/contact-fields', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) { alert('Erro ao salvar ficha: ' + (await res.text())); return; }
+    const savedEl = document.getElementById('contact-fields-saved');
+    savedEl.classList.remove('hidden');
+    setTimeout(() => savedEl.classList.add('hidden'), 2000);
   }
 
   async function loadContactNotes(waId) {

@@ -96,7 +96,7 @@ ver seção "Autenticação" abaixo.
 | `functions/api/channel-codes.js` | GET/POST/DELETE — aba "Configurações", canais fixos (bio/GMB) |
 | `config/whatsapp.js` | Mapas estágio→evento, status válidos, palavras-chave, Google Ads |
 | `migrations/0001-0014` | Schema D1, em ordem (ver nomes dos arquivos) |
-| `dash/index.html` | Dashboard single-file (Tailwind CDN, sem build). Login por sessão (cookie), menu adapta por papel (`.admin-only`), abas Calendário/Usuários novas (Bloco B) |
+| `dash/index.html` | Dashboard single-file (Tailwind CDN, sem build). Login por sessão (cookie), menu adapta por papel (`.admin-only`), abas Calendário/Usuários (Bloco B), funil kanban + lead manual + ficha do paciente em Conversas (Bloco D) |
 
 ## Deep reference
 
