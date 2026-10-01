@@ -131,11 +131,23 @@ export async function onRequestGet(context) {
     // só a linha MAIS RECENTE de Purchase por contato - senão um "Venda"
     // clicado duas vezes contaria a receita em dobro. Janela por event_time
     // (a data real da venda, que uma importação pode informar).
+    // payment_status/paid_amount (Bloco A3, migration 0011): `revenue`
+    // continua sendo o total combinado (bruto), como sempre foi; `received`
+    // e o que efetivamente entrou - integral se 'paid', so paid_amount se
+    // 'partial', zero se 'pending'. `pending` é a diferença, calculada no JS
+    // abaixo pra não repetir o CASE.
     const revenueRows = await env.DB.prepare(`
       SELECT
         CASE WHEN c.is_ctwa = 1 THEN 'meta' ELSE COALESCE(c.ad_platform, 'organico') END as channel,
         COUNT(*) as sales,
-        SUM(COALESCE(e.value, 0)) as revenue
+        SUM(COALESCE(e.value, 0)) as revenue,
+        SUM(
+          CASE
+            WHEN e.payment_status = 'pending' THEN 0
+            WHEN e.payment_status = 'partial' THEN COALESCE(e.paid_amount, 0)
+            ELSE COALESCE(e.value, 0)
+          END
+        ) as received
       FROM whatsapp_events e
       JOIN whatsapp_contacts c ON c.wa_id = e.wa_id AND c.client_id = e.client_id
       WHERE e.id IN (
@@ -146,8 +158,12 @@ export async function onRequestGet(context) {
       GROUP BY channel
       ORDER BY revenue DESC
     `).bind(client.id, from, to).all();
-    const revenueByChannel = (revenueRows.results || []).map(r => ({ channel: r.channel, sales: r.sales, revenue: r.revenue || 0 }));
+    const revenueByChannel = (revenueRows.results || []).map(r => ({
+      channel: r.channel, sales: r.sales, revenue: r.revenue || 0,
+      received: r.received || 0, pending: (r.revenue || 0) - (r.received || 0),
+    }));
     const revenueTotal = revenueByChannel.reduce((a, r) => a + r.revenue, 0);
+    const receivedTotal = revenueByChannel.reduce((a, r) => a + r.received, 0);
     const salesTotal = revenueByChannel.reduce((a, r) => a + r.sales, 0);
 
     const timeseries = buildTimeseries(leadsPerDay.results || [], stagesPerDay.results || []);
@@ -162,7 +178,7 @@ export async function onRequestGet(context) {
       by_channel: byChannel.results || [],
       click_health: { total: clickHealthRow?.total || 0, matched: clickHealthRow?.matched || 0 },
       meta_coverage: { total: metaCoverageRow?.total || 0, with_id: metaCoverageRow?.with_id || 0 },
-      revenue: { sales: salesTotal, total: revenueTotal, by_channel: revenueByChannel },
+      revenue: { sales: salesTotal, total: revenueTotal, received: receivedTotal, pending: revenueTotal - receivedTotal, by_channel: revenueByChannel },
     });
   } catch (err) {
     return json({ error: err.message }, 500);

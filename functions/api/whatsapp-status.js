@@ -1,6 +1,12 @@
 // POST /api/whatsapp-status
 // Headers: x-dash-key: <DASH_KEY>
-// Body: { "client": "<slug>", "wa_id": "...", "new_status": "qualified|scheduled|sale|lost", "value"?: number, "currency"?: "BRL" }
+// Body: { "client": "<slug>", "wa_id": "...", "new_status": "qualified|scheduled|sale|lost",
+//         "value"?: number, "currency"?: "BRL",
+//         "payment_status"?: "paid"|"pending"|"partial", "paid_amount"?: number }
+//
+// payment_status/paid_amount (Bloco A3): so faz sentido com new_status
+// "sale" - default 'paid' preserva o comportamento de sempre quando o
+// dash nao manda nada (ver applyStageTransition em stage-transition.js).
 //
 // First mutating dashboard endpoint in this project (every other /api/*.js
 // here and in krob-tracking-stack-main is read-only). Auth goes in a header,
@@ -33,12 +39,15 @@ export async function onRequestPost(context) {
     return json({ error: 'invalid JSON body' }, 400);
   }
 
-  const { client: clientSlug, wa_id, new_status, value, currency } = body;
+  const { client: clientSlug, wa_id, new_status, value, currency, payment_status, paid_amount } = body;
   if (!wa_id || !new_status) {
     return json({ error: 'wa_id and new_status are required' }, 400);
   }
   if (!VALID_STATUSES.includes(new_status)) {
     return json({ error: `new_status must be one of: ${VALID_STATUSES.join(', ')}` }, 400);
+  }
+  if (payment_status && !['paid', 'pending', 'partial'].includes(payment_status)) {
+    return json({ error: "payment_status must be one of: paid, pending, partial" }, 400);
   }
 
   const client = await resolveClientBySlug(env, clientSlug);
@@ -47,7 +56,10 @@ export async function onRequestPost(context) {
   }
   if (!assertClientAccess(session, client)) return jsonForbidden();
 
-  const result = await applyStageTransition({ env, client, waId: wa_id, newStatus: new_status, source: 'manual', value, currency });
+  const result = await applyStageTransition({
+    env, client, waId: wa_id, newStatus: new_status, source: 'manual', value, currency,
+    paymentStatus: payment_status, paidAmount: paid_amount,
+  });
   if (!result.ok) {
     return json({ error: result.error }, 404);
   }
