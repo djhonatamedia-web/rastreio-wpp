@@ -2,7 +2,8 @@
 // Headers: x-dash-key: <DASH_KEY>
 // Body: { "client": "<slug>", "wa_id": "...", "new_status": "qualified|scheduled|sale|lost",
 //         "value"?: number, "currency"?: "BRL",
-//         "payment_status"?: "paid"|"pending"|"partial", "paid_amount"?: number }
+//         "payment_status"?: "paid"|"pending"|"partial", "paid_amount"?: number,
+//         "lost_reason"?: "Preço"|"Sem resposta"|"Escolheu concorrente"|"Não é o público"|"Outro" }
 //
 // payment_status/paid_amount (Bloco A3): so faz sentido com new_status
 // "sale" - default 'paid' preserva o comportamento de sempre quando o
@@ -25,7 +26,7 @@
 // keyword-triggered path in functions/webhook/_whatsapp-core.js via
 // applyStageTransition().
 
-import { VALID_STATUSES } from '../../config/whatsapp.js';
+import { VALID_STATUSES, LOST_REASONS } from '../../config/whatsapp.js';
 import { applyStageTransition } from '../_shared/stage-transition.js';
 import { resolveClientBySlug } from '../_shared/clients.js';
 import { requireSession, assertClientAccess, jsonUnauthorized, jsonForbidden } from '../_shared/auth.js';
@@ -43,7 +44,7 @@ export async function onRequestPost(context) {
     return json({ error: 'invalid JSON body' }, 400);
   }
 
-  const { client: clientSlug, wa_id, new_status, value, currency, payment_status, paid_amount, assigned_to } = body;
+  const { client: clientSlug, wa_id, new_status, value, currency, payment_status, paid_amount, assigned_to, lost_reason } = body;
   if (!wa_id || !new_status) {
     return json({ error: 'wa_id and new_status are required' }, 400);
   }
@@ -52,6 +53,9 @@ export async function onRequestPost(context) {
   }
   if (payment_status && !['paid', 'pending', 'partial'].includes(payment_status)) {
     return json({ error: "payment_status must be one of: paid, pending, partial" }, 400);
+  }
+  if (new_status === 'lost' && lost_reason && !LOST_REASONS.includes(lost_reason)) {
+    return json({ error: `lost_reason must be one of: ${LOST_REASONS.join(', ')}` }, 400);
   }
 
   const client = await resolveClientBySlug(env, clientSlug);
@@ -75,6 +79,7 @@ export async function onRequestPost(context) {
   const result = await applyStageTransition({
     env, client, waId: wa_id, newStatus: new_status, source: 'manual', value, currency,
     paymentStatus: payment_status, paidAmount: paid_amount, changedBy: session.userId,
+    lostReason: new_status === 'lost' ? lost_reason : undefined,
   });
   if (!result.ok) {
     return json({ error: result.error }, 404);

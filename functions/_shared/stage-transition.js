@@ -32,7 +32,9 @@ import { STAGE_TO_META_EVENT, STAGE_TO_GOOGLE_ADS_ENV_VAR } from '../../config/w
 // pra 'paid'/'pending' o dash usa `value` direto.
 // changedBy (Bloco A4, auditoria): user id de quem fez a mudanca (null pro
 // gatilho por palavra-chave ou pra quem ainda usa a DASH_KEY sem login).
-export async function applyStageTransition({ env, client, waId, newStatus, source, value, currency, occurredAt, paymentStatus, paidAmount, changedBy }) {
+// lostReason (Bloco C3, plano "Funil visual"): so faz sentido com
+// newStatus 'lost' - lista fixa validada em whatsapp-status.js.
+export async function applyStageTransition({ env, client, waId, newStatus, source, value, currency, occurredAt, paymentStatus, paidAmount, changedBy, lostReason }) {
   const contact = await env.DB
     .prepare('SELECT wa_id, phone, ctwa_clid, gclid, gbraid, wbraid, fbc, fbp, client_ip, client_user_agent, landing_url FROM whatsapp_contacts WHERE client_id = ? AND wa_id = ?')
     .bind(client.id, waId)
@@ -54,7 +56,7 @@ export async function applyStageTransition({ env, client, waId, newStatus, sourc
     .run();
 
   if (!metaEventName) {
-    await insertEvent(env, { client, waId, eventName: newStatus, eventId, now, eventTime: occurredAt, value, currency, sentToMeta: 0, eventSource, paymentStatus, paidAmount, changedBy });
+    await insertEvent(env, { client, waId, eventName: newStatus, eventId, now, eventTime: occurredAt, value, currency, sentToMeta: 0, eventSource, paymentStatus, paidAmount, changedBy, lostReason });
     return { ok: true, status: newStatus, capi: 'skipped: no event mapped for this status' };
   }
 
@@ -178,22 +180,22 @@ async function sendGoogleAdsIfNeeded({ env, client, waId, contact, newStatus, va
 async function insertEvent(env, {
   client, waId, eventName, eventId, now, eventTime, value, currency, sentToMeta, statusCode, responseOk, responseBody, payloadSent, eventSource,
   googleAdsStatusCode, googleAdsResponseOk, googleAdsResponseBody, googleAdsPayloadSent,
-  paymentStatus, paidAmount, changedBy,
+  paymentStatus, paidAmount, changedBy, lostReason,
 }) {
   await env.DB.prepare(`
     INSERT INTO whatsapp_events (
       client_id, wa_id, event_name, event_id, event_time, source, value, currency,
       sent_to_meta, meta_status_code, meta_response_ok, meta_response_body, meta_payload_sent,
       google_ads_status_code, google_ads_response_ok, google_ads_response_body, google_ads_payload_sent,
-      payment_status, paid_amount, changed_by,
+      payment_status, paid_amount, changed_by, lost_reason,
       created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     client.id, waId, eventName, eventId, eventTime || now, eventSource,
     value != null ? parseFloat(value) || 0 : null, currency || null,
     sentToMeta, statusCode || null, responseOk ?? null, responseBody || null, payloadSent || null,
     googleAdsStatusCode || null, googleAdsResponseOk ?? null, googleAdsResponseBody || null, googleAdsPayloadSent || null,
-    paymentStatus || 'paid', paidAmount != null ? parseFloat(paidAmount) || 0 : null, changedBy || null,
+    paymentStatus || 'paid', paidAmount != null ? parseFloat(paidAmount) || 0 : null, changedBy || null, lostReason || null,
     now
   ).run();
 }

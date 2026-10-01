@@ -36,3 +36,8 @@ export const STAGE_TO_GOOGLE_ADS_ENV_VAR = {
   scheduled: 'GOOGLE_ADS_CONVERSION_ACTION_SCHEDULE',
   sale: 'GOOGLE_ADS_CONVERSION_ACTION_SALE',
 };
+
+// Bloco C3 do plano "Funil visual + ficha do paciente": motivo fixo pra
+// marcar "Perdido" - lista curta de propósito (dashboard de escolhas
+// demais vira dashboard que ninguém preenche direito).
+export const LOST_REASONS = ['Preço', 'Sem resposta', 'Escolheu concorrente', 'Não é o público', 'Outro'];

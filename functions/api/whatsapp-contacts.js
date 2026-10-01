@@ -13,6 +13,12 @@
 
 import { resolveClientBySlug } from '../_shared/clients.js';
 import { requireSession, assertClientAccess, jsonUnauthorized, jsonForbidden } from '../_shared/auth.js';
+import { normalizePhone, phoneMatchKey } from '../_shared/hashing.js';
+
+// Bloco C2 do plano "Funil visual + ficha do paciente": origem de um lead
+// criado manualmente - reaproveita o sistema de canal que ja existe
+// (ad_platform), entao a Visao Geral/by_channel ja conta esses sozinhos.
+const MANUAL_ORIGINS = ['indicacao', 'ligacao', 'walkin', 'outro'];
 
 export async function onRequestGet(context) {
   const { request, env } = context;
@@ -73,7 +79,7 @@ export async function onRequestGet(context) {
         first_message_at, status, status_source, status_updated_at,
         lead_sent_to_meta, lead_meta_status_code, lead_meta_response_ok,
         lead_meta_response_body, lead_meta_payload_sent,
-        created_at, updated_at
+        created_source, created_at, updated_at
       FROM whatsapp_contacts
       ${where}
       ORDER BY created_at DESC
@@ -91,6 +97,74 @@ export async function onRequestGet(context) {
   } catch (err) {
     return json({ error: err.message }, 500);
   }
+}
+
+// POST /api/whatsapp-contacts  { client, name, phone, origin }
+//
+// Bloco C2: cria um lead que NUNCA mandou mensagem (ligação, indicação,
+// walk-in). wa_id sintético (`<telefone>@manual.local`) porque todo o
+// resto do sistema é keyed por wa_id; se essa pessoa mandar mensagem de
+// verdade depois, o webhook ASSUME este registro em vez de duplicar - ver
+// claimManualContact() em functions/webhook/_whatsapp-core.js.
+export async function onRequestPost(context) {
+  const { request, env } = context;
+
+  const session = await requireSession(request, env);
+  if (!session) return jsonUnauthorized();
+
+  let body;
+  try {
+    body = await request.json();
+  } catch (err) {
+    return json({ error: 'invalid JSON body' }, 400);
+  }
+
+  const client = await resolveClientBySlug(env, body?.client);
+  if (!client) {
+    return json({ error: 'client invalido ou nao informado' }, 400);
+  }
+  if (!assertClientAccess(session, client)) return jsonForbidden();
+
+  const name = String(body?.name || '').trim().slice(0, 200);
+  const phoneRaw = String(body?.phone || '').trim();
+  const origin = body?.origin;
+  if (!name || !phoneRaw) {
+    return json({ error: 'name e phone são obrigatórios' }, 400);
+  }
+  if (!MANUAL_ORIGINS.includes(origin)) {
+    return json({ error: `origin must be one of: ${MANUAL_ORIGINS.join(', ')}` }, 400);
+  }
+
+  const key = phoneMatchKey(phoneRaw);
+  if (!key) return json({ error: 'telefone inválido' }, 400);
+
+  // Mesma tabela pequena por cliente, mesma comparacao em JS que
+  // claimManualContact() usa do lado do webhook - evita criar um segundo
+  // registro pra alguem que ja tem contato (manual ou de WhatsApp real).
+  const allContacts = await env.DB
+    .prepare('SELECT wa_id, phone, status FROM whatsapp_contacts WHERE client_id = ?')
+    .bind(client.id)
+    .all();
+  const dup = (allContacts.results || []).find(c => phoneMatchKey(c.phone) === key);
+  if (dup) {
+    return json({ error: 'já existe um contato com esse telefone neste cliente', wa_id: dup.wa_id, status: dup.status }, 409);
+  }
+
+  const phone = normalizePhone(phoneRaw);
+  const waId = `${phone}@manual.local`;
+  const now = Math.floor(Date.now() / 1000);
+
+  await env.DB
+    .prepare(`
+      INSERT INTO whatsapp_contacts (
+        client_id, wa_id, phone, push_name, is_ctwa, ad_platform,
+        first_message_text, first_message_at, status, created_source, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, 0, ?, ?, ?, 'lead', 'manual', ?, ?)
+    `)
+    .bind(client.id, waId, phone, name, origin, 'Lead criado manualmente', now, now, now)
+    .run();
+
+  return json({ ok: true, wa_id: waId });
 }
 
 function json(body, status = 200) {

@@ -52,6 +52,7 @@ export async function onRequestGet(context) {
         first_message_text,
         first_message_at, status, status_source, status_updated_at,
         lead_sent_to_meta, lead_meta_status_code, lead_meta_response_ok,
+        birth_date, insurance, interest, cpf, address, created_source, assigned_to,
         created_at, updated_at
       FROM whatsapp_contacts
       WHERE client_id = ? AND wa_id = ?
@@ -60,6 +61,18 @@ export async function onRequestGet(context) {
     if (!contact) {
       return json({ error: 'contato nao encontrado neste cliente' }, 404);
     }
+
+    // Bloco C1 do plano "Funil visual": a proxima consulta aparece no
+    // drawer sem precisar trocar pra aba Calendario e buscar o contato de
+    // novo. So a mais proxima - o historico completo continua so no
+    // Calendario.
+    const nextAppointment = await env.DB.prepare(`
+      SELECT id, scheduled_at, status, procedure_label
+      FROM appointments
+      WHERE client_id = ? AND wa_id = ? AND scheduled_at >= ? AND status NOT IN ('canceled')
+      ORDER BY scheduled_at ASC
+      LIMIT 1
+    `).bind(client.id, waId, Math.floor(Date.now() / 1000)).first();
 
     // COALESCE(event_time, created_at): event_time is WhatsApp's own
     // timestamp, which is the truthful conversation order - uazapi does
@@ -137,6 +150,7 @@ export async function onRequestGet(context) {
       contact,
       timeline,
       timings: buildTimings(timeline, contact),
+      next_appointment: nextAppointment || null,
     });
   } catch (err) {
     return json({ error: err.message }, 500);

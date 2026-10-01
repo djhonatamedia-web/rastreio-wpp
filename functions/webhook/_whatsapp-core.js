@@ -56,6 +56,7 @@ import { sendWhatsAppEventToMeta } from './_whatsapp-capi.js';
 import { sendMetaWebEvent, hasMetaSiteId } from './_meta-web-capi.js';
 import { applyStageTransition } from '../_shared/stage-transition.js';
 import { normalize } from '../_shared/text-normalize.js';
+import { phoneMatchKey } from '../_shared/hashing.js';
 
 export async function processWhatsAppMessage({ raw, env, context, client }) {
   const now = Math.floor(Date.now() / 1000);
@@ -96,10 +97,21 @@ export async function processWhatsAppMessage({ raw, env, context, client }) {
     return { ok: true, skipped: !extracted ? 'unrecognized payload shape' : 'not an inbound 1:1 message' };
   }
 
-  const existing = await env.DB
+  let existing = await env.DB
     .prepare('SELECT id, ctwa_clid, is_ctwa, gclid, gbraid, wbraid, ad_platform FROM whatsapp_contacts WHERE client_id = ? AND wa_id = ?')
     .bind(client.id, extracted.waId)
     .first();
+
+  // Bloco C2 do plano "Funil visual + ficha do paciente": um lead criado
+  // manualmente (ligacao, indicacao - functions/api/whatsapp-contacts.js)
+  // ganha um wa_id sintetico (`<telefone>@manual.local`) porque nunca
+  // mandou mensagem. Se a PESSOA REAL manda mensagem depois, isso teria
+  // virado um SEGUNDO contato - em vez disso, assume o registro manual
+  // (mesmo id, nota e consulta ja lancadas preservadas) e segue pelo
+  // mesmo caminho de "contato existente" logo abaixo.
+  if (!existing) {
+    existing = await claimManualContact({ env, client, phone: extracted.phone, realWaId: extracted.waId, now });
+  }
 
   if (existing) {
     await env.DB
@@ -213,6 +225,41 @@ export async function processWhatsAppMessage({ raw, env, context, client }) {
 
   const capi = await sendFirstTouchLead({ extracted, click, eventId, now, env, context, client });
   return { ok: true, contact: 'created', waId: extracted.waId, capi };
+}
+
+// Bloco C2: procura um contato criado manualmente (created_source =
+// 'manual') do mesmo cliente cujo telefone bate com quem acabou de mandar
+// mensagem de verdade, e "assume" esse registro (troca o wa_id sintetico
+// pelo real) em vez de deixar o INSERT normal criar um segundo contato.
+// Tabela pequena por cliente (dezenas, nao milhoes) - compara em JS com
+// phoneMatchKey() mesmo padrao de functions/api/sales-import.js, que ja
+// faz exatamente essa comparacao pra outra finalidade.
+async function claimManualContact({ env, client, phone, realWaId, now }) {
+  const key = phoneMatchKey(phone);
+  if (!key) return null;
+
+  const manualRows = await env.DB
+    .prepare("SELECT id, wa_id, phone FROM whatsapp_contacts WHERE client_id = ? AND created_source = 'manual'")
+    .bind(client.id)
+    .all();
+  const match = (manualRows.results || []).find(r => phoneMatchKey(r.phone) === key);
+  if (!match) return null;
+
+  const oldWaId = match.wa_id;
+  // As duas tabelas que tambem guardam wa_id direto (nao via FK) precisam
+  // seguir junto, senao a nota e a consulta ja lancadas ficam orfas,
+  // presas a um wa_id que não existe mais em whatsapp_contacts.
+  await env.DB.prepare('UPDATE whatsapp_contacts SET wa_id = ?, updated_at = ? WHERE client_id = ? AND id = ?')
+    .bind(realWaId, now, client.id, match.id).run();
+  await env.DB.prepare('UPDATE contact_notes SET wa_id = ? WHERE client_id = ? AND wa_id = ?')
+    .bind(realWaId, client.id, oldWaId).run();
+  await env.DB.prepare('UPDATE appointments SET wa_id = ? WHERE client_id = ? AND wa_id = ?')
+    .bind(realWaId, client.id, oldWaId).run();
+
+  return await env.DB
+    .prepare('SELECT id, ctwa_clid, is_ctwa, gclid, gbraid, wbraid, ad_platform FROM whatsapp_contacts WHERE client_id = ? AND wa_id = ?')
+    .bind(client.id, realWaId)
+    .first();
 }
 
 // Looks up a code captured earlier by /api/track-click (a Google Ads click,

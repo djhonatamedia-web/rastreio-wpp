@@ -31,6 +31,7 @@ export async function onRequestGet(context) {
 
   const from = parseInt(url.searchParams.get('from') || '', 10);
   const to = parseInt(url.searchParams.get('to') || '', 10);
+  const waId = url.searchParams.get('wa_id');
 
   const clauses = ['a.client_id = ?'];
   const binds = [client.id];
@@ -41,6 +42,12 @@ export async function onRequestGet(context) {
   if (Number.isFinite(to)) {
     clauses.push('a.scheduled_at <= ?');
     binds.push(to);
+  }
+  if (waId) {
+    // Bloco C4: busca por contato - usado pelo drawer pra achar a
+    // proxima/ultima consulta sem buscar o mes inteiro.
+    clauses.push('a.wa_id = ?');
+    binds.push(waId);
   }
   const where = `WHERE ${clauses.join(' AND ')}`;
 

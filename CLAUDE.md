@@ -81,7 +81,8 @@ ver seção "Autenticação" abaixo.
 | `functions/api/users.js` | GET/POST/DELETE — aba "Usuários" (admin cria/desativa login de equipe) |
 | `functions/api/appointments.js` | GET/POST/PATCH — calendário: consulta com data/hora real, separada do status do funil |
 | `functions/api/contact-notes.js` | GET/POST — nota livre por contato, por cliente |
-| `functions/api/whatsapp-contacts.js` | GET — aba "Conversas" (lista) |
+| `functions/api/contact-fields.js` | POST — ficha do paciente (convênio, procedimento, nascimento, CPF, endereço) |
+| `functions/api/whatsapp-contacts.js` | GET — aba "Conversas" (lista); POST — cria lead manual (ligação/indicação/walk-in) |
 | `functions/api/whatsapp-contact.js` | GET — painel de um contato: timeline, origem e tempo de resposta |
 | `functions/api/whatsapp-events.js` | GET — aba "Eventos" (log cru) |
 | `functions/api/whatsapp-status.js` | POST — marcar estágio manualmente |
@@ -94,7 +95,7 @@ ver seção "Autenticação" abaixo.
 | `functions/api/sales-import.js` | POST — importa fechamentos (telefone + valor + data), marca Venda e devolve a conversão (ver `docs/fechamentos.md`) |
 | `functions/api/channel-codes.js` | GET/POST/DELETE — aba "Configurações", canais fixos (bio/GMB) |
 | `config/whatsapp.js` | Mapas estágio→evento, status válidos, palavras-chave, Google Ads |
-| `migrations/0001-0013` | Schema D1, em ordem (ver nomes dos arquivos) |
+| `migrations/0001-0014` | Schema D1, em ordem (ver nomes dos arquivos) |
 | `dash/index.html` | Dashboard single-file (Tailwind CDN, sem build). Login por sessão (cookie), menu adapta por papel (`.admin-only`), abas Calendário/Usuários novas (Bloco B) |
 
 ## Deep reference
