@@ -87,6 +87,8 @@ ver seção "Autenticação" abaixo.
 | `functions/api/whatsapp-events.js` | GET — aba "Eventos" (log cru) |
 | `functions/api/whatsapp-status.js` | POST — marcar estágio manualmente |
 | `functions/api/whatsapp-stats.js` | GET — aba "Visão Geral" |
+| `functions/api/reports.js` | GET — aba "Relatórios": custo por paciente, ROAS, ticket médio, tempo até agendar, comparecimento (Bloco G) |
+| `functions/api/ad-spend.js` | GET/POST — investimento mensal em anúncios digitado à mão (sem integração com API de insights) |
 | `functions/api/whatsapp-keywords.js` | GET/POST/DELETE — aba "Palavras-chave" |
 | `functions/api/config.js` | GET/POST/DELETE — aba "Configurações" |
 | `functions/api/clients.js` | GET/POST — aba "Clientes" (lista/cria cliente) |
@@ -95,8 +97,8 @@ ver seção "Autenticação" abaixo.
 | `functions/api/sales-import.js` | POST — importa fechamentos (telefone + valor + data), marca Venda e devolve a conversão (ver `docs/fechamentos.md`) |
 | `functions/api/channel-codes.js` | GET/POST/DELETE — aba "Configurações", canais fixos (bio/GMB) |
 | `config/whatsapp.js` | Mapas estágio→evento, status válidos, palavras-chave, Google Ads |
-| `migrations/0001-0014` | Schema D1, em ordem (ver nomes dos arquivos) |
-| `dash/index.html` | Dashboard single-file (Tailwind CDN, sem build). Login por sessão (cookie), menu adapta por papel (`.admin-only`), abas Calendário/Usuários (Bloco B), funil kanban + lead manual + ficha do paciente em Conversas (Bloco D) |
+| `migrations/0001-0015` | Schema D1, em ordem (ver nomes dos arquivos) |
+| `dash/index.html` | Dashboard single-file (Tailwind CDN, sem build). Login por sessão (cookie), menu adapta por papel (`.admin-only`). Visual baseado no Design System "Clínica CRM" (Claude Designs, Bloco E): tokens em `:root`/`:root[data-theme="dark"]`. Abas Calendário/Usuários (Bloco B), funil kanban + lead manual + ficha do paciente em Conversas/Pacientes (Bloco D/F), Relatórios (Bloco G) |
 
 ## Deep reference
 

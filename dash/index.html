@@ -428,6 +428,7 @@
         <div class="nav-item active" data-tab="visao-geral"><svg class="icon"><use href="#icon-grid"/></svg><span>Visão Geral</span></div>
         <div class="nav-item" data-tab="conversas"><svg class="icon"><use href="#icon-chat"/></svg><span>Conversas</span></div>
         <div class="nav-item" data-tab="calendario"><svg class="icon"><use href="#icon-calendar"/></svg><span>Calendário</span></div>
+        <div class="nav-item admin-only" data-tab="relatorios"><svg class="icon"><use href="#icon-dollar"/></svg><span>Relatórios</span></div>
         <div class="nav-item admin-only" data-tab="eventos"><svg class="icon"><use href="#icon-activity"/></svg><span>Eventos</span></div>
         <div class="nav-item admin-only" data-tab="keywords"><svg class="icon"><use href="#icon-tag"/></svg><span>Palavras-chave</span></div>
         <div class="nav-item admin-only" data-tab="config"><svg class="icon"><use href="#icon-sliders"/></svg><span>Configurações</span></div>
@@ -649,6 +650,57 @@
           <div class="card p-4">
             <div class="font-semibold text-sm mb-3" id="calendar-day-title">Hoje</div>
             <div id="calendar-day-list" class="space-y-2"></div>
+          </div>
+        </section>
+
+        <!-- Relatórios tab (Bloco G) -->
+        <section id="tab-relatorios" class="fade-in hidden space-y-4">
+          <div class="flex items-center gap-2">
+            <span class="text-xs uppercase tracking-wider" style="color:var(--text-muted)">Período</span>
+            <div id="reports-range-selector" class="flex gap-1 flex-wrap items-center">
+              <button class="action-btn" data-days="7">7d</button>
+              <button class="action-btn active-range" data-days="30">30d</button>
+              <button class="action-btn" data-days="60">60d</button>
+              <button class="action-btn" data-days="90">90d</button>
+            </div>
+          </div>
+
+          <div class="kpi-grid" id="reports-kpis"></div>
+
+          <div class="card p-4">
+            <div class="flex items-center justify-between flex-wrap gap-2 mb-1">
+              <div class="font-semibold text-sm">Investimento em anúncios</div>
+            </div>
+            <div class="text-xs mb-3" style="color:var(--text-dim)">
+              Não existe integração com a API de investimento do Meta/Google Ads neste
+              sistema - digite aqui, uma vez por mês, o quanto foi investido, pra calcular
+              custo por paciente e retorno acima.
+            </div>
+            <div class="flex items-center gap-2 flex-wrap">
+              <input type="month" id="reports-spend-period" class="input" style="width:9.5rem">
+              <input type="text" id="reports-spend-amount" placeholder="Valor investido (R$)" class="input" style="width:11rem">
+              <button class="btn-primary" onclick="submitAdSpend()">Salvar</button>
+              <span id="reports-spend-error" class="text-xs hidden" style="color:var(--stage-lost-text)"></span>
+            </div>
+            <div id="reports-spend-list" class="text-xs mt-3 space-y-1" style="color:var(--text-dim)"></div>
+          </div>
+
+          <div class="card p-4">
+            <div class="font-semibold text-sm mb-3">Funil por origem</div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="text-left text-xs uppercase tracking-wider border-b" style="color:var(--text-muted)">
+                    <th class="py-2 pr-3">Origem</th>
+                    <th class="py-2 pr-3">Novos contatos</th>
+                    <th class="py-2 pr-3">Agendaram</th>
+                    <th class="py-2 pr-3">Fecharam</th>
+                    <th class="py-2 pr-3">Conversão</th>
+                  </tr>
+                </thead>
+                <tbody id="reports-by-channel-body" class="mono"></tbody>
+              </table>
+            </div>
           </div>
         </section>
 
@@ -1305,7 +1357,7 @@
   document.getElementById('auth-submit').addEventListener('click', doLogin);
   document.getElementById('auth-password').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
 
-  const TAB_TITLES = { 'visao-geral': 'Visão Geral', 'conversas': 'Conversas', 'calendario': 'Calendário', 'eventos': 'Eventos', 'keywords': 'Palavras-chave', 'config': 'Configurações', 'clientes': 'Clientes', 'usuarios': 'Usuários' };
+  const TAB_TITLES = { 'visao-geral': 'Visão Geral', 'conversas': 'Conversas', 'calendario': 'Calendário', 'relatorios': 'Relatórios', 'eventos': 'Eventos', 'keywords': 'Palavras-chave', 'config': 'Configurações', 'clientes': 'Clientes', 'usuarios': 'Usuários' };
   const ALL_TABS = Object.keys(TAB_TITLES);
 
   function activateTab(target) {
@@ -1314,6 +1366,7 @@
     ALL_TABS.forEach(t => document.getElementById('tab-' + t).classList.toggle('hidden', t !== target));
     document.getElementById('page-title').textContent = TAB_TITLES[target] || '';
     if (target === 'conversas') loadKanban();
+    if (target === 'relatorios') loadReports();
     if (target === 'keywords') loadKeywords();
     if (target === 'config') { loadConfig(); loadClientStatus(); loadChannelCodes(); loadAdClicks(); }
     if (target === 'clientes') loadClientsAdmin();
@@ -1801,6 +1854,108 @@
     loadStats();
     if (currentTab === 'conversas') loadKanban();
   }
+
+  // Relatórios (Bloco G): KPIs de gestão que a Visão Geral não responde -
+  // custo por paciente, retorno, ticket médio, tempo até agendar,
+  // comparecimento. Reaproveita fmtBRL/AD_PLATFORM_LABELS já existentes.
+  let reportsRangeDays = 30;
+  async function loadReports() {
+    const epoch = clientEpoch;
+    const res = await fetch(`/api/reports?client=${encodeURIComponent(currentClient)}&days=${reportsRangeDays}`);
+    if (epoch !== clientEpoch) return;
+    if (!res.ok) {
+      document.getElementById('reports-kpis').innerHTML = errorLine('Não foi possível carregar os relatórios: ' + await readError(res));
+      return;
+    }
+    const data = await res.json();
+    if (epoch !== clientEpoch) return;
+    renderReportsKpis(data);
+    renderReportsByChannel(data.by_channel || []);
+    loadAdSpend();
+  }
+
+  function reportsKpiTile(label, value, icon, reading) {
+    return `
+      <div class="card kpi-card" style="align-items:flex-start">
+        <div class="kpi-icon kpi-icon-sale"><svg class="icon"><use href="#icon-${icon}"/></svg></div>
+        <div>
+          <div class="kpi-label">${label}</div>
+          <div class="kpi-value mono">${value}</div>
+          ${reading ? `<div class="text-xs mt-1" style="color:var(--text-muted)">${reading}</div>` : ''}
+        </div>
+      </div>
+    `;
+  }
+
+  function renderReportsKpis(d) {
+    const el = document.getElementById('reports-kpis');
+    el.innerHTML = [
+      reportsKpiTile('Custo por paciente', d.cost_per_lead != null ? fmtBRL(d.cost_per_lead) : '—', 'dollar', d.cost_per_lead == null ? 'Digite o investimento abaixo' : `${d.leads} novo(s) contato(s) no período`),
+      reportsKpiTile('Retorno (ROAS)', d.roas != null ? `${d.roas}x` : '—', 'activity', d.roas != null ? (d.roas >= 2 ? 'Bom retorno' : d.roas >= 1 ? 'No ponto de equilíbrio' : 'Abaixo do investido') : null),
+      reportsKpiTile('Ticket médio', d.avg_ticket != null ? fmtBRL(d.avg_ticket) : '—', 'tag', `${d.sales} fechamento(s)`),
+      reportsKpiTile('Tempo até agendar', d.avg_schedule_days != null ? `${d.avg_schedule_days}d` : '—', 'calendar', null),
+      reportsKpiTile('Comparecimento', d.attendance.rate_pct != null ? `${d.attendance.rate_pct}%` : '—', 'check', d.attendance.rate_pct != null ? `${d.attendance.attended} compareceu, ${d.attendance.no_show} faltou` : 'Sem consulta no período'),
+    ].join('');
+  }
+
+  function renderReportsByChannel(rows) {
+    const body = document.getElementById('reports-by-channel-body');
+    body.innerHTML = (rows || []).map(r => {
+      const conv = r.leads ? Math.round((r.sale / r.leads) * 100) : 0;
+      const label = r.channel === 'meta' ? 'Meta Ads' : r.channel === 'organico' ? 'Orgânico' : (AD_PLATFORM_LABELS[r.channel] || r.channel);
+      return `
+        <tr class="row-hover border-b">
+          <td class="py-2 pr-3">${escapeHtml(label)}</td>
+          <td class="py-2 pr-3">${r.leads}</td>
+          <td class="py-2 pr-3">${r.scheduled}</td>
+          <td class="py-2 pr-3">${r.sale}</td>
+          <td class="py-2 pr-3">${conv}%</td>
+        </tr>
+      `;
+    }).join('') || `<tr><td colspan="5" class="py-6 text-center" style="color:var(--text-muted)">Nenhum contato no período.</td></tr>`;
+  }
+
+  async function loadAdSpend() {
+    const res = await fetch(`/api/ad-spend?client=${encodeURIComponent(currentClient)}`, { headers: { 'x-dash-key': key } });
+    if (!res.ok) return;
+    const data = await res.json();
+    const list = document.getElementById('reports-spend-list');
+    list.innerHTML = (data.spend || []).map(s => `<div>${s.period} — ${fmtBRL(s.amount)}</div>`).join('') || 'Nenhum investimento digitado ainda.';
+  }
+
+  async function submitAdSpend() {
+    const period = document.getElementById('reports-spend-period').value;
+    const amount = parseMoneyInput(document.getElementById('reports-spend-amount').value);
+    const errorEl = document.getElementById('reports-spend-error');
+    errorEl.classList.add('hidden');
+    if (!period || amount == null) {
+      errorEl.textContent = 'Informe o mês e um valor válido.';
+      errorEl.classList.remove('hidden');
+      return;
+    }
+    const res = await fetch('/api/ad-spend', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-dash-key': key },
+      body: JSON.stringify({ client: currentClient, period, amount }),
+    });
+    if (!res.ok) {
+      errorEl.textContent = await readError(res);
+      errorEl.classList.remove('hidden');
+      return;
+    }
+    document.getElementById('reports-spend-amount').value = '';
+    loadAdSpend();
+    loadReports();
+  }
+
+  document.querySelectorAll('#reports-range-selector button[data-days]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#reports-range-selector button').forEach(b => b.classList.remove('active-range'));
+      btn.classList.add('active-range');
+      reportsRangeDays = Number(btn.dataset.days);
+      loadReports();
+    });
+  });
 
   async function loadEvents() {
     const search = document.getElementById('eventos-search').value.trim();
