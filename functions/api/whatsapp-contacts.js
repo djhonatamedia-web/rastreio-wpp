@@ -57,8 +57,16 @@ export async function onRequestGet(context) {
     clauses.push('is_ctwa = 1');
   }
   if (search) {
-    clauses.push('phone LIKE ?');
-    binds.push(`%${search.replace(/\D/g, '')}%`);
+    const digits = search.replace(/\D/g, '');
+    if (digits) {
+      // dígito só: pode ser telefone OU CPF (Pacientes README: "busca por
+      // nome, telefone ou CPF") - CPF nunca sai na listagem, só casa aqui.
+      clauses.push('(phone LIKE ? OR cpf LIKE ? OR push_name LIKE ?)');
+      binds.push(`%${digits}%`, `%${digits}%`, `%${search}%`);
+    } else {
+      clauses.push('push_name LIKE ?');
+      binds.push(`%${search}%`);
+    }
   }
   if (from != null && !Number.isNaN(from)) {
     clauses.push('created_at >= ?');
@@ -79,6 +87,12 @@ export async function onRequestGet(context) {
         first_message_at, status, status_source, status_updated_at,
         lead_sent_to_meta, lead_meta_status_code, lead_meta_response_ok,
         lead_meta_response_body, lead_meta_payload_sent,
+        insurance, interest, assigned_to,
+        (SELECT u.name FROM users u WHERE u.id = whatsapp_contacts.assigned_to) AS assigned_to_name,
+        (SELECT ev.value FROM whatsapp_events ev
+          WHERE ev.client_id = whatsapp_contacts.client_id AND ev.wa_id = whatsapp_contacts.wa_id
+            AND ev.event_name = 'Purchase'
+          ORDER BY ev.id DESC LIMIT 1) AS sale_value,
         created_source, created_at, updated_at
       FROM whatsapp_contacts
       ${where}

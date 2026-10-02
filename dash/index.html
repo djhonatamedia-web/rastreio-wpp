@@ -194,7 +194,7 @@
     padding: 0.625rem; display: flex; flex-direction: column; gap: 0.5rem;
     min-height: 3rem;
   }
-  .kanban-column.drag-over { outline: 2px dashed var(--accent); outline-offset: -2px; }
+  .kanban-column.drag-over { outline: 2px dashed var(--sky); outline-offset: -2px; }
   .kanban-column-header { display: flex; align-items: center; justify-content: space-between; padding: 0.125rem 0.25rem 0.375rem; }
   .kanban-column-title { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-dim); }
   .kanban-column-count { font-size: 0.6875rem; font-weight: 600; color: var(--text-muted); background: var(--surface); border-radius: 100px; padding: 0.0625rem 0.4375rem; }
@@ -204,7 +204,7 @@
     padding: 0.625rem; cursor: grab; display: flex; flex-direction: column; gap: 0.375rem;
   }
   .kanban-card:hover { border-color: var(--border-strong); box-shadow: var(--shadow-sm); }
-  .kanban-card.dragging { opacity: 0.4; }
+  .kanban-card.dragging { opacity: 0.4; box-shadow: var(--shadow-md); }
   .kanban-card-top { display: flex; align-items: center; gap: 0.5rem; }
   .kanban-card-name { font-size: 0.8125rem; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
   .kanban-card-phone { font-size: 0.6875rem; color: var(--text-muted); }
@@ -213,6 +213,18 @@
     font-size: 0.625rem; font-weight: 600; padding: 0.0625rem 0.375rem; border-radius: 100px;
     background: var(--accent-soft); color: var(--accent-hover);
   }
+  .kanban-card-tag {
+    font-size: 0.625rem; font-weight: 500; padding: 0.0625rem 0.375rem; border-radius: 100px;
+    background: var(--surface-hover); color: var(--text-dim); border: 1px solid var(--border);
+  }
+  .kanban-card-interest { font-size: 0.6875rem; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .kanban-card-next { font-size: 0.6875rem; font-weight: 600; display: flex; align-items: center; gap: 0.3rem; }
+  .kanban-card-next::before { content: ''; width: 0.375rem; height: 0.375rem; border-radius: 100px; background: currentColor; flex-shrink: 0; }
+  .kanban-card-next-ok { color: var(--text-muted); }
+  .kanban-card-next-soon { color: var(--amber); }
+  .kanban-card-next-late { color: var(--rose); }
+  .kanban-card-owner { font-size: 0.625rem; color: var(--text-muted); }
+  .kanban-column-sum { font-size: 0.625rem; color: var(--text-muted); font-weight: 600; font-variant-numeric: tabular-nums; }
   .kanban-card-attend { font-size: 0.625rem; font-weight: 700; padding: 0.0625rem 0.375rem; border-radius: 100px; }
   .kanban-card-attend-attended { background: var(--accent-soft); color: var(--accent-hover); }
   .kanban-card-attend-no_show { background: #fde8e8; color: var(--stage-lost-text); }
@@ -561,7 +573,7 @@
           <!-- Lista (filtros detalhados) - formato original -->
           <div id="conversas-list-view" class="hidden card p-4">
             <div class="flex items-center gap-3 mb-3 flex-wrap">
-              <input id="conversas-search" type="text" placeholder="Buscar por telefone" class="input flex-1 max-w-xs">
+              <input id="conversas-search" type="text" placeholder="Buscar por nome, telefone ou CPF" class="input flex-1 max-w-xs">
               <label class="flex items-center gap-2 text-sm" style="color:var(--text-dim)">
                 <input type="checkbox" id="conversas-only-ctwa"> só CTWA
               </label>
@@ -586,15 +598,27 @@
               <button class="action-btn" title="Limpar datas" onclick="clearConversasDateFilter()">Limpar</button>
               <button class="action-btn ml-auto" onclick="loadContacts()"><svg class="icon"><use href="#icon-refresh"/></svg></button>
             </div>
+            <div id="pacientes-bulk-bar" class="hidden flex items-center gap-2 mb-3 p-2" style="background:var(--accent-soft); border-radius:var(--radius-md)">
+              <span id="pacientes-bulk-count" class="text-xs font-semibold" style="color:var(--accent-hover)"></span>
+              <span class="text-xs" style="color:var(--text-dim)">Mover para</span>
+              <select id="pacientes-bulk-status" class="input" style="width:9.5rem" title="Perdido não está aqui: pede motivo, um de cada vez">
+                <option value="qualified">Qualificado</option>
+                <option value="scheduled">Agendado</option>
+                <option value="sale">Fechou</option>
+              </select>
+              <button class="btn-primary" onclick="applyBulkMove()">Aplicar</button>
+              <button class="action-btn" onclick="clearBulkSelection()">Cancelar</button>
+            </div>
             <div class="table-scroll overflow-x-auto">
               <table class="w-full text-sm">
                 <thead>
                   <tr class="text-left text-xs uppercase tracking-wider border-b" style="color:var(--text-muted)">
-                    <th class="py-2 pr-3">Telefone</th>
-                    <th class="py-2 pr-3">Nome</th>
-                    <th class="py-2 pr-3">Status</th>
-                    <th class="py-2 pr-3">Anúncio</th>
-                    <th class="py-2 pr-3">Primeira mensagem</th>
+                    <th class="py-2 pr-3"><input type="checkbox" id="pacientes-select-all" onchange="toggleSelectAllPacientes(this.checked)"></th>
+                    <th class="py-2 pr-3">Paciente</th>
+                    <th class="py-2 pr-3">Etapa</th>
+                    <th class="py-2 pr-3">Interesse</th>
+                    <th class="py-2 pr-3">Convênio</th>
+                    <th class="py-2 pr-3">Origem</th>
                     <th class="py-2 pr-3">Recebido</th>
                     <th class="py-2 pr-3">Ações</th>
                   </tr>
@@ -1029,6 +1053,7 @@
   // over the new one.
   let clientEpoch = 0;
   let currentContacts = [];
+  const selectedPacientes = new Set();
   let openContactWaId = null;
   let currentChannelCodes = {};
 
@@ -1671,7 +1696,7 @@
     if (epoch !== clientEpoch) return;
     if (!res.ok) {
       document.getElementById('status-counts').innerHTML = '';
-      document.getElementById('conversas-body').innerHTML = `<tr><td colspan="7">${errorLine('Não foi possível carregar as conversas: ' + await readError(res))}</td></tr>`;
+      document.getElementById('conversas-body').innerHTML = `<tr><td colspan="8">${errorLine('Não foi possível carregar as conversas: ' + await readError(res))}</td></tr>`;
       return;
     }
     const data = await res.json();
@@ -1694,17 +1719,23 @@
     // so reopening a contact after an action re-reads its current status.
     currentContacts = data.contacts || [];
 
+    selectedPacientes.clear();
+    updateBulkBar();
     const body = document.getElementById('conversas-body');
     body.innerHTML = currentContacts.map(c => `
       <tr class="row-hover border-b cursor-pointer" data-wa="${escapeHtml(c.wa_id)}">
-        <td class="py-2 pr-3">${c.phone}</td>
-        <td class="py-2 pr-3">${escapeHtml(c.push_name || '—')}</td>
+        <td class="py-2 pr-3" onclick="event.stopPropagation()"><input type="checkbox" class="pacientes-row-check" onchange="togglePacienteSelection('${c.wa_id}', this.checked)"></td>
+        <td class="py-2 pr-3">
+          <div class="font-medium" style="font-family:var(--font-ui)">${escapeHtml(c.push_name || '—')}</div>
+          <div class="text-xs" style="color:var(--text-muted)">${c.phone}</div>
+        </td>
         <td class="py-2 pr-3">
           <span class="badge badge-${c.status}">${STATUS_LABELS[c.status] || c.status}</span>
           ${c.status_source === 'keyword' ? `<span class="text-[10px] ml-1" style="color:var(--text-muted)" title="Mudou sozinho por palavra-chave">🔤 frase</span>` : ''}
         </td>
-        <td class="py-2 pr-3">${c.is_ctwa ? `<div class="flex items-center gap-2">${c.ad_thumbnail_url ? `<img class="ad-thumb-sm" src="${escapeHtml(c.ad_thumbnail_url)}" alt="" onerror="this.style.display='none'">` : ''}<span title="${escapeHtml(c.ad_headline || '')}">${escapeHtml(c.ad_headline || 'CTWA')}</span>${c.ctwa_clid ? '' : `<span class="text-[10px]" style="color:var(--text-muted)" title="O WhatsApp não entregou o ctwa_clid: este lead aparece aqui mas não volta pro Meta">sem clid</span>`}</div>` : (c.ad_platform ? `<span class="badge badge-scheduled" title="${escapeHtml(c.gclid || '')}">${AD_PLATFORM_LABELS[c.ad_platform] || c.ad_platform}</span>` : '—')}</td>
-        <td class="py-2 pr-3 max-w-xs truncate" title="${escapeHtml(c.first_message_text || '')}">${escapeHtml(c.first_message_text || '—')}</td>
+        <td class="py-2 pr-3 max-w-[10rem] truncate" title="${escapeHtml(c.interest || '')}">${escapeHtml(c.interest || '—')}</td>
+        <td class="py-2 pr-3">${escapeHtml(c.insurance || '—')}</td>
+        <td class="py-2 pr-3">${c.is_ctwa ? `<div class="flex items-center gap-2">${c.ad_thumbnail_url ? `<img class="ad-thumb-sm" src="${escapeHtml(c.ad_thumbnail_url)}" alt="" onerror="this.style.display='none'">` : ''}<span title="${escapeHtml(c.ad_headline || '')}">${escapeHtml(c.ad_headline || 'CTWA')}</span>${c.ctwa_clid ? '' : `<span class="text-[10px]" style="color:var(--text-muted)" title="O WhatsApp não entregou o ctwa_clid: este lead aparece aqui mas não volta pro Meta">sem clid</span>`}</div>` : (c.ad_platform ? `<span class="badge badge-scheduled" title="${escapeHtml(c.gclid || '')}">${AD_PLATFORM_LABELS[c.ad_platform] || c.ad_platform}</span>` : 'Orgânico')}</td>
         <td class="py-2 pr-3">${fmtTime(c.first_message_at)}</td>
         <td class="py-2 pr-3 whitespace-nowrap">
           <div class="row-actions">
@@ -1715,11 +1746,60 @@
           </div>
         </td>
       </tr>
-    `).join('') || `<tr><td colspan="7"><div class="empty-state"><svg class="icon"><use href="#icon-inbox"/></svg>Nenhuma conversa ainda.</div></td></tr>`;
+    `).join('') || `<tr><td colspan="8"><div class="empty-state"><svg class="icon"><use href="#icon-inbox"/></svg>Nenhuma conversa ainda.</div></td></tr>`;
 
     body.querySelectorAll('tr[data-wa]').forEach(row => {
       row.addEventListener('click', () => openContact(row.dataset.wa));
     });
+  }
+
+  // Seleção em massa da lista "Pacientes" (cl-bulk do design system): só
+  // "mover etapa" por enquanto - "enviar mensagem" e "exportar" dependem de
+  // envio de WhatsApp/relatório que ainda não existem neste bloco.
+  function togglePacienteSelection(waId, checked) {
+    if (checked) selectedPacientes.add(waId); else selectedPacientes.delete(waId);
+    const row = document.querySelector(`#conversas-body tr[data-wa="${CSS.escape(waId)}"]`);
+    if (row) row.style.background = checked ? 'var(--accent-soft)' : '';
+    updateBulkBar();
+  }
+  function toggleSelectAllPacientes(checked) {
+    document.querySelectorAll('.pacientes-row-check').forEach(cb => {
+      cb.checked = checked;
+      const row = cb.closest('tr[data-wa]');
+      if (row) {
+        if (checked) selectedPacientes.add(row.dataset.wa); else selectedPacientes.delete(row.dataset.wa);
+        row.style.background = checked ? 'var(--accent-soft)' : '';
+      }
+    });
+    updateBulkBar();
+  }
+  function updateBulkBar() {
+    const bar = document.getElementById('pacientes-bulk-bar');
+    const n = selectedPacientes.size;
+    bar.classList.toggle('hidden', n === 0);
+    if (n > 0) document.getElementById('pacientes-bulk-count').textContent = `${n} selecionado${n > 1 ? 's' : ''}`;
+  }
+  function clearBulkSelection() {
+    selectedPacientes.clear();
+    document.getElementById('pacientes-select-all').checked = false;
+    document.querySelectorAll('.pacientes-row-check').forEach(cb => cb.checked = false);
+    document.querySelectorAll('#conversas-body tr[data-wa]').forEach(row => row.style.background = '');
+    updateBulkBar();
+  }
+  async function applyBulkMove() {
+    const newStatus = document.getElementById('pacientes-bulk-status').value;
+    const ids = [...selectedPacientes];
+    for (const waId of ids) {
+      await fetch('/api/whatsapp-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-dash-key': key },
+        body: JSON.stringify({ client: currentClient, wa_id: waId, new_status: newStatus }),
+      });
+    }
+    clearBulkSelection();
+    loadContacts();
+    loadStats();
+    if (currentTab === 'conversas') loadKanban();
   }
 
   async function loadEvents() {
@@ -1926,11 +2006,15 @@
     const board = document.getElementById('kanban-board');
     board.innerHTML = KANBAN_STATUSES.map(status => {
       const cards = kanbanContacts.filter(c => c.status === status);
+      const sum = cards.reduce((acc, c) => acc + (Number(c.sale_value) || 0), 0);
       return `
         <div class="kanban-column" data-status="${status}" ondragover="kanbanDragOver(event)" ondragleave="kanbanDragLeave(event)" ondrop="kanbanDrop(event,'${status}')">
           <div class="kanban-column-header">
             <span class="kanban-column-title">${KANBAN_LABELS[status]}</span>
-            <span class="kanban-column-count">${cards.length}</span>
+            <span class="flex items-center gap-2">
+              ${sum > 0 ? `<span class="kanban-column-sum">${fmtBRL(sum)}</span>` : ''}
+              <span class="kanban-column-count">${cards.length}</span>
+            </span>
           </div>
           <div class="kanban-cards">
             ${cards.map(renderKanbanCard).join('') || `<div class="text-xs" style="color:var(--text-muted)">Nenhum lead aqui.</div>`}
@@ -1964,20 +2048,33 @@
     return 'Orgânico';
   }
 
+  // Próxima ação do cartão (PatientCard do design system: todo paciente
+  // precisa de uma, com prazo - ok/soon/late vira amber/rose no footer).
+  function kanbanNextAction(c, appt) {
+    const now = Math.floor(Date.now() / 1000);
+    if (c.status === 'scheduled' && appt && appt.status !== 'canceled' && appt.scheduled_at > now) {
+      const soon = appt.scheduled_at - now < 86400;
+      const when = new Date(appt.scheduled_at * 1000).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+      return { label: `Consulta ${when}`, cls: soon ? 'soon' : 'ok' };
+    }
+    const staleDays = Math.floor((now - (c.status_updated_at || c.created_at)) / 86400);
+    if (staleDays <= 0) return { label: 'Chegou hoje', cls: 'ok' };
+    return { label: `Parado há ${staleDays}d`, cls: staleDays >= 7 ? 'late' : staleDays >= 3 ? 'soon' : 'ok' };
+  }
+
   function renderKanbanCard(c) {
     const name = c.push_name || c.phone;
-    const staleDays = Math.floor((Date.now() / 1000 - (c.status_updated_at || c.created_at)) / 86400);
+    const appt = kanbanAppointmentsByWaId[c.wa_id];
 
     let attendBadge = '';
-    if (c.status === 'scheduled') {
-      const appt = kanbanAppointmentsByWaId[c.wa_id];
-      if (appt) {
-        if (appt.status === 'attended') attendBadge = `<span class="kanban-card-attend kanban-card-attend-attended">Compareceu</span>`;
-        else if (appt.status === 'no_show') attendBadge = `<span class="kanban-card-attend kanban-card-attend-no_show">Não compareceu</span>`;
-        else if (appt.status !== 'canceled') attendBadge = `<span class="kanban-card-attend kanban-card-attend-waiting">Aguardando</span>`;
-      }
+    if (c.status === 'scheduled' && appt) {
+      if (appt.status === 'attended') attendBadge = `<span class="kanban-card-attend kanban-card-attend-attended">Compareceu</span>`;
+      else if (appt.status === 'no_show') attendBadge = `<span class="kanban-card-attend kanban-card-attend-no_show">Não compareceu</span>`;
     }
 
+    const tags = [kanbanOriginLabel(c)];
+    if (c.insurance) tags.push(c.insurance);
+    const next = kanbanNextAction(c, appt);
     const lostActionBtn = c.status !== 'lost' ? `<button class="action-btn" onclick="event.stopPropagation(); markLost('${c.wa_id}')" title="Marcar como perdido">✕</button>` : '';
 
     return `
@@ -1988,19 +2085,22 @@
             <div class="kanban-card-name">${escapeHtml(name)}</div>
             <div class="kanban-card-phone mono">${escapeHtml(c.phone)}</div>
           </div>
+          ${c.sale_value ? `<span class="kanban-card-value">${fmtBRL(c.sale_value)}</span>` : ''}
         </div>
+        ${c.interest ? `<div class="kanban-card-interest" title="${escapeHtml(c.interest)}">${escapeHtml(c.interest)}</div>` : ''}
         <div class="kanban-card-meta">
-          <span class="kanban-card-badge">${escapeHtml(kanbanOriginLabel(c))}</span>
+          ${tags.slice(0, 3).map(t => `<span class="kanban-card-tag">${escapeHtml(t)}</span>`).join('')}
           ${attendBadge}
           ${!c.ctwa_clid && c.is_ctwa ? '<span class="kanban-card-attend kanban-card-attend-no_show" title="O WhatsApp não entregou o ctwa_clid: não volta pro Meta">sem clid</span>' : ''}
         </div>
-        <div class="flex items-center justify-between">
-          <span class="kanban-card-stale">${staleDays}d parado</span>
+        <div class="flex items-center justify-between gap-2">
+          <span class="kanban-card-next kanban-card-next-${next.cls}">${escapeHtml(next.label)}</span>
           <div class="kanban-card-actions">
             <button class="action-btn" onclick='event.stopPropagation(); openApptModalFor("${c.wa_id}", ${JSON.stringify(escapeHtml(name))})' title="Agendar consulta">Agendar</button>
             ${lostActionBtn}
           </div>
         </div>
+        ${c.assigned_to_name ? `<div class="kanban-card-owner">${escapeHtml(c.assigned_to_name)}</div>` : ''}
       </div>
     `;
   }
