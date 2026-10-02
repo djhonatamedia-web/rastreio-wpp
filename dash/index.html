@@ -6,72 +6,90 @@
 <title>Rastreio WPP</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <style>
+  /* Tokens do Design System "Clínica CRM" (Claude Designs) - Bloco E */
   :root {
-    --bg: #f7f8fa;
+    --bg: #f5f4ef;
     --surface: #ffffff;
-    --surface-hover: #f2f3f6;
+    --surface-hover: #eeede7;
     --sidebar-bg: #ffffff;
-    --border: #e6e8ec;
-    --border-strong: #d7dae0;
-    --text: #15171c;
-    --text-dim: #565b66;
-    --text-muted: #9297a3;
-    --accent: #0f9d63;
-    --accent-hover: #0c7f50;
-    --accent-soft: #e3f6ec;
+    --border: #e2e0d8;
+    --border-strong: #7c827b;
+    --text: #15201c;
+    --text-dim: #4f5c57;
+    --text-muted: #646f6a;
+    --accent: #0c6a5a;
+    --accent-hover: #0a5549;
+    --accent-soft: #dff0ea;
     --accent-contrast: #ffffff;
-    --shadow-sm: 0 1px 2px rgba(15,23,42,0.06);
-    --shadow-md: 0 8px 24px rgba(15,23,42,0.10);
+    --shadow-sm: 0 1px 2px rgba(21,32,28,0.06);
+    --shadow-md: 0 8px 24px rgba(21,32,28,0.14);
     --radius-sm: 6px;
     --radius-md: 10px;
-    --radius-lg: 14px;
+    --radius-lg: 16px;
+    --radius-pill: 999px;
 
-    --stage-lead-bg: #eef0f3;      --stage-lead-text: #4b505c;
-    --stage-qualified-bg: #e7edfe; --stage-qualified-text: #2454d6;
-    --stage-scheduled-bg: #fdf1dd; --stage-scheduled-text: #96650a;
-    --stage-sale-bg: var(--accent-soft); --stage-sale-text: var(--accent-hover);
-    --stage-lost-bg: #fdeaea;      --stage-lost-text: #c0292c;
+    --sky: #2a62a6; --sky-soft: #e4edf8; --sky-ink: #1d4d87;
+    --plum: #6a4a9c; --plum-soft: #eee8f7; --plum-ink: #553a82;
+    --amber: #b05d0c; --amber-soft: #fbeedf; --amber-ink: #7f4308;
+    --rose: #b1302a; --rose-soft: #fbe6e3; --rose-ink: #922822;
 
-    --chart-leads: #2f6fed;
-    --chart-qualified: #7c5cfc;
-    --chart-scheduled: #d98a1f;
-    --chart-sale: #0f9d63;
+    --stage-lead-bg: var(--surface-hover);  --stage-lead-text: var(--text-dim);
+    --stage-qualified-bg: var(--plum-soft); --stage-qualified-text: var(--plum-ink);
+    --stage-scheduled-bg: var(--sky-soft);  --stage-scheduled-text: var(--sky-ink);
+    --stage-sale-bg: var(--accent-soft);    --stage-sale-text: var(--accent-hover);
+    --stage-lost-bg: var(--rose-soft);      --stage-lost-text: var(--rose-ink);
 
-    --font-ui: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --chart-leads: var(--sky);
+    --chart-qualified: var(--plum);
+    --chart-scheduled: var(--amber);
+    --chart-sale: var(--accent);
+
+    --font-ui: "Instrument Sans", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+    --font-display: "Instrument Serif", Georgia, serif;
     --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   }
   :root[data-theme="dark"] {
-    --bg: #0c0d10;
-    --surface: #15171c;
-    --surface-hover: #1b1e24;
-    --sidebar-bg: #111318;
-    --border: #24272e;
-    --border-strong: #32363f;
-    --text: #eef0f3;
-    --text-dim: #a7acb6;
-    --text-muted: #6d7280;
-    --accent: #22c55e;
-    --accent-hover: #16a34a;
-    --accent-soft: #123423;
-    --accent-contrast: #04150b;
+    --bg: #0f1513;
+    --surface: #171e1b;
+    --surface-hover: #0b100e;
+    --sidebar-bg: #171e1b;
+    --border: #28312d;
+    --border-strong: #6b7a73;
+    --text: #edf2ef;
+    --text-dim: #a9b6b0;
+    --text-muted: #8e9b95;
+    --accent: #4fc4a9;
+    --accent-hover: #4fc4a9;
+    --accent-soft: #123a31;
+    --accent-contrast: #04201a;
     --shadow-sm: 0 1px 2px rgba(0,0,0,0.4);
-    --shadow-md: 0 12px 32px rgba(0,0,0,0.5);
+    --shadow-md: 0 8px 24px rgba(0,0,0,0.5);
 
-    --stage-lead-bg: #23262d;      --stage-lead-text: #c7cbd4;
-    --stage-qualified-bg: #1b2740; --stage-qualified-text: #8fb0fb;
-    --stage-scheduled-bg: #332707; --stage-scheduled-text: #f0bd5a;
-    --stage-sale-bg: var(--accent-soft); --stage-sale-text: var(--accent);
-    --stage-lost-bg: #341417;      --stage-lost-text: #ff8f8f;
+    --sky: #80b2ef; --sky-soft: #162a42; --sky-ink: #acccf5;
+    --plum: #bba3e8; --plum-soft: #2a2240; --plum-ink: #d2c0f2;
+    --amber: #f0a95c; --amber-soft: #3a2814; --amber-ink: #f6c391;
+    --rose: #f08a82; --rose-soft: #3d1a18; --rose-ink: #f7b0a9;
 
-    --chart-leads: #6f9bff;
-    --chart-qualified: #a98bff;
-    --chart-scheduled: #eab55a;
-    --chart-sale: #22c55e;
+    --stage-lead-bg: var(--surface-hover);  --stage-lead-text: var(--text-dim);
+    --stage-qualified-bg: var(--plum-soft); --stage-qualified-text: var(--plum-ink);
+    --stage-scheduled-bg: var(--sky-soft);  --stage-scheduled-text: var(--sky-ink);
+    --stage-sale-bg: var(--accent-soft);    --stage-sale-text: var(--accent);
+    --stage-lost-bg: var(--rose-soft);      --stage-lost-text: var(--rose-ink);
+
+    --chart-leads: var(--sky);
+    --chart-qualified: var(--plum);
+    --chart-scheduled: var(--amber);
+    --chart-sale: var(--accent);
   }
+
+  .text-display { font-family: var(--font-display); font-weight: 400; font-size: 2.75rem; line-height: 1.09; letter-spacing: -0.01em; }
+  .text-title { font-family: var(--font-display); font-weight: 400; font-size: 1.75rem; line-height: 1.14; }
+  .text-label { font-family: var(--font-ui); font-weight: 600; font-size: 0.6875rem; line-height: 0.875rem; letter-spacing: 0.06em; text-transform: uppercase; }
+  .text-metric { font-family: var(--font-ui); font-weight: 600; font-size: 1.875rem; line-height: 1.13; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 
   html, body { background: var(--bg); color: var(--text); font-family: var(--font-ui); }
   * { border-color: var(--border); }
@@ -109,7 +127,7 @@
 
   .sidebar-brand { display: flex; align-items: center; gap: 0.625rem; padding: 1.125rem 1.125rem 0.875rem; }
   .brand-mark { width: 2rem; height: 2rem; border-radius: var(--radius-sm); background: var(--accent); color: var(--accent-contrast); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-  .brand-name { font-weight: 700; font-size: 0.9375rem; line-height: 1.1; }
+  .brand-name { font-family: var(--font-display); font-weight: 400; font-size: 1.0625rem; line-height: 1.1; }
   .brand-sub { font-size: 0.6875rem; color: var(--text-muted); }
 
   .workspace-wrap { padding: 0 0.75rem; margin-bottom: 0.5rem; position: relative; }
@@ -234,7 +252,6 @@
   /* ---- Topbar ---- */
   .topbar { position: sticky; top: 0; z-index: 20; background: var(--bg); border-bottom: 1px solid var(--border); }
   .topbar-inner { max-width: 84rem; margin: 0 auto; padding: 0.875rem 2rem; display: flex; align-items: center; gap: 0.75rem; }
-  #page-title { font-weight: 700; font-size: 1.0625rem; }
   .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 2rem; height: 2rem; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface); color: var(--text-dim); cursor: pointer; }
   .icon-btn:hover { background: var(--surface-hover); color: var(--text); }
 
@@ -270,7 +287,7 @@
   .kpi-icon-sale { background: var(--stage-sale-bg); color: var(--stage-sale-text); }
   .kpi-icon-lost { background: var(--stage-lost-bg); color: var(--stage-lost-text); }
   .kpi-label { font-size: 0.6875rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; }
-  .kpi-value { font-size: 1.25rem; font-weight: 700; margin-top: 0.125rem; }
+  .kpi-value { font-family: var(--font-ui); font-size: 1.25rem; font-weight: 600; margin-top: 0.125rem; font-variant-numeric: tabular-nums; }
 
   .funnel-connector { padding: 0.125rem 0 0.125rem 5.5rem; font-size: 0.6875rem; color: var(--text-muted); }
   .funnel-row { display: grid; grid-template-columns: 5.5rem 1fr 3rem; align-items: center; gap: 0.625rem; }
@@ -429,7 +446,7 @@
       <div class="topbar">
         <div class="topbar-inner">
           <button class="icon-btn sidebar-toggle" onclick="toggleSidebar()"><svg class="icon"><use href="#icon-menu"/></svg></button>
-          <div id="page-title">Visão Geral</div>
+          <div id="page-title" class="text-title" style="font-size:1.25rem"></div>
           <div id="topbar-client" class="client-pill">
             <span class="avatar avatar-sm" id="topbar-client-avatar">?</span>
             <span id="topbar-client-name">—</span>
@@ -550,10 +567,10 @@
               </label>
               <select id="conversas-status" class="input" style="width:9.5rem" onchange="loadContacts()" title="Filtrar pelo estágio atual">
                 <option value="">Todos os estágios</option>
-                <option value="lead">Lead</option>
+                <option value="lead">Novo contato</option>
                 <option value="qualified">Qualificado</option>
                 <option value="scheduled">Agendado</option>
-                <option value="sale">Venda</option>
+                <option value="sale">Fechou</option>
                 <option value="lost">Perdido</option>
               </select>
               <select id="conversas-stale" class="input" style="width:11rem" onchange="loadContacts()" title="Útil com 'Agendado': mostra quem agendou e ninguém voltou pra fechar">
@@ -854,7 +871,7 @@
   <div class="drawer-header">
     <span class="avatar" id="contact-avatar">?</span>
     <div class="min-w-0 flex-1">
-      <div class="font-semibold truncate" id="contact-name">—</div>
+      <div class="text-title truncate" style="font-size:1.0625rem" id="contact-name">—</div>
       <div class="text-xs mono" style="color:var(--text-muted)" id="contact-phone">—</div>
     </div>
     <span id="contact-status-badge"></span>
@@ -864,7 +881,7 @@
   <div class="drawer-footer">
     <button class="action-btn" onclick="contactAction('qualified')">Qualificado</button>
     <button class="action-btn" onclick="contactAction('scheduled')">Agendado</button>
-    <button class="action-btn" onclick="contactAction('sale')">Venda</button>
+    <button class="action-btn" onclick="contactAction('sale')">Fechou</button>
     <button class="action-btn" onclick="contactAction('lost')">Perdido</button>
     <button class="action-btn" onclick="openApptModalFromDrawer()">Agendar</button>
     <span class="text-[10px] ml-auto self-center" style="color:var(--text-muted)">J / K navega · Esc fecha</span>
@@ -1291,7 +1308,7 @@
     }
   });
 
-  const STATUS_LABELS = { lead: 'Lead', qualified: 'Qualificado', scheduled: 'Agendado', sale: 'Venda', lost: 'Perdido' };
+  const STATUS_LABELS = { lead: 'Novo contato', qualified: 'Qualificado', scheduled: 'Agendado', sale: 'Fechou', lost: 'Perdido' };
   const AD_PLATFORM_LABELS = {
     google: 'Google Ads', bio: 'Link na Bio', gmb: 'Google Meu Negócio', meta_site: 'Meta Ads (site)',
     // Origens de lead manual (Bloco C2) - mesmo mapa, sem precisar de relatório novo.
@@ -1299,7 +1316,7 @@
   };
   const MANUAL_ORIGIN_LABELS = { indicacao: 'Indicação', ligacao: 'Ligação', walkin: 'Walk-in', outro: 'Outro' };
   const KANBAN_STATUSES = ['lead', 'qualified', 'scheduled', 'sale'];
-  const KANBAN_LABELS = { lead: 'Lead', qualified: 'Qualificado', scheduled: 'Agendado', sale: 'Venda' };
+  const KANBAN_LABELS = { lead: 'Novo contato', qualified: 'Qualificado', scheduled: 'Agendado', sale: 'Fechou' };
   const STATUS_ICONS = { lead: 'users', qualified: 'check', scheduled: 'calendar', sale: 'dollar', lost: 'x' };
   let currentEventsRaw = [];
   let evolutionChart = null;
@@ -1693,7 +1710,7 @@
           <div class="row-actions">
             <button class="action-btn" onclick="event.stopPropagation(); markStatus('${c.wa_id}','qualified')">Qualificado</button>
             <button class="action-btn" onclick="event.stopPropagation(); markStatus('${c.wa_id}','scheduled')">Agendado</button>
-            <button class="action-btn" onclick="event.stopPropagation(); markSale('${c.wa_id}')">Venda</button>
+            <button class="action-btn" onclick="event.stopPropagation(); markSale('${c.wa_id}')">Fechou</button>
             <button class="action-btn" onclick="event.stopPropagation(); markStatus('${c.wa_id}','lost')">Perdido</button>
           </div>
         </td>
