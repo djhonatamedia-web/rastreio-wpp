@@ -98,7 +98,8 @@ ver seção "Autenticação" abaixo.
 | `functions/api/channel-codes.js` | GET/POST/DELETE — aba "Configurações", canais fixos (bio/GMB) |
 | `config/whatsapp.js` | Mapas estágio→evento, status válidos, palavras-chave, Google Ads |
 | `migrations/0001-0015` | Schema D1, em ordem (ver nomes dos arquivos) |
-| `dash/index.html` | Dashboard single-file (Tailwind CDN, sem build). Login por sessão (cookie), menu adapta por papel (`.admin-only`). Visual baseado no Design System "Clínica CRM" (Claude Designs, Bloco E): tokens em `:root`/`:root[data-theme="dark"]`. Abas Calendário/Usuários (Bloco B), funil kanban + lead manual + ficha do paciente em Conversas/Pacientes (Bloco D/F), Relatórios (Bloco G) |
+| `dash/index.html` | Dashboard single-file (Tailwind CDN, sem build). Login por sessão (cookie), menu adapta por papel (`.admin-only`). Visual baseado no Design System "Clínica CRM" (Claude Designs, Bloco E): tokens em `:root`/`:root[data-theme="dark"]`, com alias pros nomes `cl-*` que o bundle React espera. Abas Calendário/Usuários (Bloco B), funil kanban (React real, ver abaixo) + lead manual + ficha do paciente em Conversas/Pacientes (Bloco D/F), Relatórios (Bloco G) |
+| `dash/vendor/clinica-crm/{bundle.js,bundle.css}` | Componentes React REAIS do design system (baixados do artifact, não editar à mão - window.ClinicaCRM). Carregados via `<script>` puro (React 18 UMD + bundle, zero build) - ver `mountKanban()` em dash/index.html pra como orquestrar o board sem o wrapper `Kanban` pronto (ele não repassa `onOpen` pro `PatientCard`) |
 
 ## Deep reference
 

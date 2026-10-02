@@ -9,6 +9,13 @@
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<!-- Design System "Clínica CRM" (Claude Designs) - componentes React reais,
+     baixados pro repositório em dash/vendor/clinica-crm/ (zero build: o
+     bundle é um IIFE que espera window.React/ReactDOM já carregados e
+     assina window.ClinicaCRM - ver bundle.js). -->
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<link rel="stylesheet" href="vendor/clinica-crm/bundle.css">
 <style>
   /* Tokens do Design System "Clínica CRM" (Claude Designs) - Bloco E */
   :root {
@@ -84,6 +91,20 @@
     --chart-qualified: var(--plum);
     --chart-scheduled: var(--amber);
     --chart-sale: var(--accent);
+  }
+
+  /* Alias pros nomes de variável que o bundle.css do design system espera
+     (cl-*) - sem segunda fonte de verdade: tudo aponta pro token já
+     definido acima, então tema claro/escuro continua funcionando sozinho. */
+  :root {
+    --ink: var(--text); --ink-muted: var(--text-dim); --ink-subtle: var(--text-muted);
+    --line: var(--border); --line-strong: var(--border-strong);
+    --pine: var(--accent); --pine-ink: var(--accent-hover); --pine-soft: var(--accent-soft); --on-pine: var(--accent-contrast);
+    --font-sans: var(--font-ui); --font-serif: var(--font-display);
+    --focus: var(--sky);
+    --shadow-card: var(--shadow-sm); --shadow-lift: var(--shadow-md);
+    --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+    --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-12: 48px;
   }
 
   .text-display { font-family: var(--font-display); font-weight: 400; font-size: 2.75rem; line-height: 1.09; letter-spacing: -0.01em; }
@@ -187,55 +208,8 @@
     .calendar-cell.calendar-has-appts::after { content: ''; display: block; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); margin: 0 auto; }
   }
 
-  /* Funil visual / kanban (Bloco D1) */
-  .kanban-board { display: grid; grid-template-columns: repeat(4, minmax(15rem, 1fr)); gap: 0.75rem; align-items: start; }
-  .kanban-column {
-    background: var(--surface-hover); border-radius: var(--radius-md);
-    padding: 0.625rem; display: flex; flex-direction: column; gap: 0.5rem;
-    min-height: 3rem;
-  }
-  .kanban-column.drag-over { outline: 2px dashed var(--sky); outline-offset: -2px; }
-  .kanban-column-header { display: flex; align-items: center; justify-content: space-between; padding: 0.125rem 0.25rem 0.375rem; }
-  .kanban-column-title { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-dim); }
-  .kanban-column-count { font-size: 0.6875rem; font-weight: 600; color: var(--text-muted); background: var(--surface); border-radius: 100px; padding: 0.0625rem 0.4375rem; }
-  .kanban-cards { display: flex; flex-direction: column; gap: 0.5rem; min-height: 2rem; }
-  .kanban-card {
-    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
-    padding: 0.625rem; cursor: grab; display: flex; flex-direction: column; gap: 0.375rem;
-  }
-  .kanban-card:hover { border-color: var(--border-strong); box-shadow: var(--shadow-sm); }
-  .kanban-card.dragging { opacity: 0.4; box-shadow: var(--shadow-md); }
-  .kanban-card-top { display: flex; align-items: center; gap: 0.5rem; }
-  .kanban-card-name { font-size: 0.8125rem; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
-  .kanban-card-phone { font-size: 0.6875rem; color: var(--text-muted); }
-  .kanban-card-meta { display: flex; align-items: center; gap: 0.375rem; flex-wrap: wrap; }
-  .kanban-card-badge {
-    font-size: 0.625rem; font-weight: 600; padding: 0.0625rem 0.375rem; border-radius: 100px;
-    background: var(--accent-soft); color: var(--accent-hover);
-  }
-  .kanban-card-tag {
-    font-size: 0.625rem; font-weight: 500; padding: 0.0625rem 0.375rem; border-radius: 100px;
-    background: var(--surface-hover); color: var(--text-dim); border: 1px solid var(--border);
-  }
-  .kanban-card-interest { font-size: 0.6875rem; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .kanban-card-next { font-size: 0.6875rem; font-weight: 600; display: flex; align-items: center; gap: 0.3rem; }
-  .kanban-card-next::before { content: ''; width: 0.375rem; height: 0.375rem; border-radius: 100px; background: currentColor; flex-shrink: 0; }
-  .kanban-card-next-ok { color: var(--text-muted); }
-  .kanban-card-next-soon { color: var(--amber); }
-  .kanban-card-next-late { color: var(--rose); }
-  .kanban-card-owner { font-size: 0.625rem; color: var(--text-muted); }
-  .kanban-column-sum { font-size: 0.625rem; color: var(--text-muted); font-weight: 600; font-variant-numeric: tabular-nums; }
-  .kanban-card-attend { font-size: 0.625rem; font-weight: 700; padding: 0.0625rem 0.375rem; border-radius: 100px; }
-  .kanban-card-attend-attended { background: var(--accent-soft); color: var(--accent-hover); }
-  .kanban-card-attend-no_show { background: #fde8e8; color: var(--stage-lost-text); }
-  .kanban-card-attend-waiting { background: var(--surface-hover); color: var(--text-muted); }
-  .kanban-card-value { font-size: 0.75rem; font-weight: 700; color: var(--chart-sale); }
-  .kanban-card-stale { font-size: 0.625rem; color: var(--text-muted); }
-  .kanban-card-actions { display: flex; gap: 0.3rem; }
-  .kanban-card-actions .action-btn { padding: 0.2rem 0.4rem; font-size: 0.6875rem; }
-  @media (max-width: 1023px) {
-    .kanban-board { grid-template-columns: 1fr; }
-  }
+  /* Funil visual / kanban: usa as classes cl-board/cl-col/cl-card do
+     bundle.css do design system agora (Bloco E-React) - nada próprio aqui. */
 
   /* Crescimento (Bloco A5/B6) */
   .growth-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 0.75rem; }
@@ -562,13 +536,12 @@
             </button>
           </div>
 
-          <!-- Funil visual (kanban) - Bloco D1 -->
-          <div id="conversas-kanban-view">
-            <div id="kanban-board" class="kanban-board"></div>
-            <button class="action-btn mt-2" onclick="toggleLostColumn()">
-              <span id="kanban-lost-toggle-label">Ver perdidos</span>
-            </button>
-            <div id="kanban-lost-column" class="kanban-column hidden mt-2" style="max-width:20rem"></div>
+          <!-- Funil visual (kanban) - componente real Kanban/PatientCard do
+               design system (Claude Designs), montado via React direto neste
+               div (ver mountKanban()). Perdido é só mais uma coluna agora -
+               o cl-board rola na horizontal, sem toggle separado. -->
+          <div id="conversas-kanban-view" class="cl-root">
+            <div id="kanban-root"></div>
           </div>
 
           <!-- Lista (filtros detalhados) - formato original -->
@@ -1086,6 +1059,7 @@
   </div>
 </div>
 
+<script src="vendor/clinica-crm/bundle.js"></script>
 <script>
   // DASH_KEY legada: fica vazia agora que o login é por sessão (cookie
   // HttpOnly, enviado automaticamente pelo fetch do mesmo domínio). Mantida
@@ -1301,7 +1275,9 @@
       pill.classList.add('switch-flash');
     }
     renderSkeletonRows('conversas-body', 7);
-    document.getElementById('kanban-board').innerHTML = KANBAN_STATUSES.map(s => `<div class="kanban-column"><div class="kanban-column-header"><span class="kanban-column-title">${KANBAN_LABELS[s]}</span></div><div class="skeleton-bar" style="height:3rem"></div></div>`).join('');
+    // kanban-root é dono do React (mountKanban()) - não mexe no innerHTML
+    // dele direto; loadKanban() já re-renderiza em seguida com os dados do
+    // cliente novo.
     renderSkeletonRows('eventos-body', 7);
     renderSkeletonRows('by-ad-body', 5);
     renderSkeletonRows('by-channel-body', 5);
@@ -1393,8 +1369,8 @@
     indicacao: 'Indicação', ligacao: 'Ligação', walkin: 'Walk-in', outro: 'Outro',
   };
   const MANUAL_ORIGIN_LABELS = { indicacao: 'Indicação', ligacao: 'Ligação', walkin: 'Walk-in', outro: 'Outro' };
-  const KANBAN_STATUSES = ['lead', 'qualified', 'scheduled', 'sale'];
-  const KANBAN_LABELS = { lead: 'Novo contato', qualified: 'Qualificado', scheduled: 'Agendado', sale: 'Fechou' };
+  const KANBAN_STATUSES = ['lead', 'qualified', 'scheduled', 'sale', 'lost'];
+  const KANBAN_LABELS = { lead: 'Novo contato', qualified: 'Qualificado', scheduled: 'Agendado', sale: 'Fechou', lost: 'Perdido' };
   const STATUS_ICONS = { lead: 'users', qualified: 'check', scheduled: 'calendar', sale: 'dollar', lost: 'x' };
   let currentEventsRaw = [];
   let evolutionChart = null;
@@ -2109,11 +2085,9 @@
     loadContacts();
   }
 
-  // ===== Funil visual / kanban (Bloco D1) =====
+  // ===== Funil visual / kanban (Bloco D1, componentes reais Bloco E-React) =====
   let kanbanContacts = [];
   let kanbanAppointmentsByWaId = {};
-  let kanbanDraggedWaId = null;
-  let showLostColumn = false;
 
   function setConversasView(view) {
     document.getElementById('conversas-kanban-view').classList.toggle('hidden', view !== 'kanban');
@@ -2134,7 +2108,7 @@
     const res = await fetch(`/api/whatsapp-contacts?client=${encodeURIComponent(currentClient)}&limit=500`);
     if (epoch !== clientEpoch) return;
     if (!res.ok) {
-      document.getElementById('kanban-board').innerHTML = errorLine('Não foi possível carregar o funil: ' + await readError(res));
+      kanbanRenderError('Não foi possível carregar o funil: ' + await readError(res));
       return;
     }
     const data = await res.json();
@@ -2154,47 +2128,16 @@
       }
     }
     if (epoch !== clientEpoch) return;
-    renderKanban();
+    mountKanban();
   }
 
-  function renderKanban() {
-    const board = document.getElementById('kanban-board');
-    board.innerHTML = KANBAN_STATUSES.map(status => {
-      const cards = kanbanContacts.filter(c => c.status === status);
-      const sum = cards.reduce((acc, c) => acc + (Number(c.sale_value) || 0), 0);
-      return `
-        <div class="kanban-column" data-status="${status}" ondragover="kanbanDragOver(event)" ondragleave="kanbanDragLeave(event)" ondrop="kanbanDrop(event,'${status}')">
-          <div class="kanban-column-header">
-            <span class="kanban-column-title">${KANBAN_LABELS[status]}</span>
-            <span class="flex items-center gap-2">
-              ${sum > 0 ? `<span class="kanban-column-sum">${fmtBRL(sum)}</span>` : ''}
-              <span class="kanban-column-count">${cards.length}</span>
-            </span>
-          </div>
-          <div class="kanban-cards">
-            ${cards.map(renderKanbanCard).join('') || `<div class="text-xs" style="color:var(--text-muted)">Nenhum lead aqui.</div>`}
-          </div>
-        </div>
-      `;
-    }).join('');
-    renderLostColumn();
-  }
-
-  function renderLostColumn() {
-    const lostCards = kanbanContacts.filter(c => c.status === 'lost');
-    document.getElementById('kanban-lost-toggle-label').textContent = showLostColumn ? 'Esconder perdidos' : `Ver perdidos (${lostCards.length})`;
-    const col = document.getElementById('kanban-lost-column');
-    col.classList.toggle('hidden', !showLostColumn);
-    if (showLostColumn) {
-      col.innerHTML = `
-        <div class="kanban-column-header"><span class="kanban-column-title">Perdido</span><span class="kanban-column-count">${lostCards.length}</span></div>
-        <div class="kanban-cards">${lostCards.map(renderKanbanCard).join('') || `<div class="text-xs" style="color:var(--text-muted)">Nenhum lead perdido no momento.</div>`}</div>
-      `;
-    }
-  }
-  function toggleLostColumn() {
-    showLostColumn = !showLostColumn;
-    renderLostColumn();
+  // kanban-root vira dono do React assim que mountKanban() roda uma vez -
+  // depois disso, nunca escrever innerHTML nele direto (React perde o
+  // controle do DOM e quebra no próximo render); desmonta a raiz antes.
+  function kanbanRenderError(msg) {
+    const root = document.getElementById('kanban-root');
+    if (root._reactRoot) { root._reactRoot.unmount(); root._reactRoot = null; }
+    root.innerHTML = errorLine(msg);
   }
 
   function kanbanOriginLabel(c) {
@@ -2210,81 +2153,89 @@
     if (c.status === 'scheduled' && appt && appt.status !== 'canceled' && appt.scheduled_at > now) {
       const soon = appt.scheduled_at - now < 86400;
       const when = new Date(appt.scheduled_at * 1000).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-      return { label: `Consulta ${when}`, cls: soon ? 'soon' : 'ok' };
+      return { label: `Consulta ${when}`, status: soon ? 'soon' : 'ok' };
     }
     const staleDays = Math.floor((now - (c.status_updated_at || c.created_at)) / 86400);
-    if (staleDays <= 0) return { label: 'Chegou hoje', cls: 'ok' };
-    return { label: `Parado há ${staleDays}d`, cls: staleDays >= 7 ? 'late' : staleDays >= 3 ? 'soon' : 'ok' };
+    if (staleDays <= 0) return { label: 'Chegou hoje', status: 'ok' };
+    return { label: `Parado há ${staleDays}d`, status: staleDays >= 7 ? 'late' : staleDays >= 3 ? 'soon' : 'ok' };
   }
 
-  function renderKanbanCard(c) {
-    const name = c.push_name || c.phone;
-    const appt = kanbanAppointmentsByWaId[c.wa_id];
+  const KANBAN_COLUMN_COLOR = { lead: 'var(--ink-subtle)', qualified: 'var(--plum)', scheduled: 'var(--sky)', sale: 'var(--pine)', lost: 'var(--rose)' };
 
-    let attendBadge = '';
-    if (c.status === 'scheduled' && appt) {
-      if (appt.status === 'attended') attendBadge = `<span class="kanban-card-attend kanban-card-attend-attended">Compareceu</span>`;
-      else if (appt.status === 'no_show') attendBadge = `<span class="kanban-card-attend kanban-card-attend-no_show">Não compareceu</span>`;
+  // Monta o Pipeline usando os componentes REAIS do design system
+  // (window.ClinicaCRM.PatientCard, via React) - ver dash/vendor/clinica-crm.
+  // Não uso o componente ClinicaCRM.Kanban pronto porque ele não repassa
+  // onOpen pro PatientCard (dá pra arrastar mas não dá pra clicar e abrir o
+  // paciente) - então recrio só a orquestração do board (board/coluna/drop),
+  // igual ao que o próprio Kanban faz por dentro, e uso o PatientCard de
+  // verdade pra cada cartão.
+  let kanbanDragSource = null;
+  function mountKanban() {
+    const C = window.ClinicaCRM;
+    const h = React.createElement;
+    const root = document.getElementById('kanban-root');
+    if (!C || !root) return;
+    if (!root._reactRoot) root._reactRoot = ReactDOM.createRoot(root);
+
+    const columns = KANBAN_STATUSES.map(status => {
+      const contacts = kanbanContacts.filter(c => c.status === status);
+      const sum = contacts.reduce((acc, c) => acc + (Number(c.sale_value) || 0), 0);
+      return {
+        id: status,
+        name: KANBAN_LABELS[status],
+        color: KANBAN_COLUMN_COLOR[status],
+        summary: sum > 0 ? fmtBRL(sum) : null,
+        cards: contacts.map(c => {
+          const appt = kanbanAppointmentsByWaId[c.wa_id];
+          const name = c.push_name || c.phone;
+          const tags = [kanbanOriginLabel(c)];
+          if (c.insurance) tags.push(c.insurance);
+          let badge = null;
+          if (c.status === 'scheduled' && appt) {
+            if (appt.status === 'attended') badge = { tone: 'pine', children: 'Compareceu' };
+            else if (appt.status === 'no_show') badge = { tone: 'rose', children: 'Não compareceu' };
+          }
+          return {
+            id: c.wa_id, name, procedure: c.interest || undefined,
+            value: c.sale_value ? fmtBRL(c.sale_value) : undefined,
+            tags, badge, next: kanbanNextAction(c, appt), owner: c.assigned_to_name || undefined,
+          };
+        }),
+      };
+    });
+
+    function handleDrop(toStatus) {
+      const src = kanbanDragSource;
+      kanbanDragSource = null;
+      if (!src || src.from === toStatus) return;
+      if (toStatus === 'lost') { markLost(src.id); return; }
+      if (toStatus === 'sale') { markSale(src.id); return; }
+      markStatus(src.id, toStatus);
     }
 
-    const tags = [kanbanOriginLabel(c)];
-    if (c.insurance) tags.push(c.insurance);
-    const next = kanbanNextAction(c, appt);
-    const lostActionBtn = c.status !== 'lost' ? `<button class="action-btn" onclick="event.stopPropagation(); markLost('${c.wa_id}')" title="Marcar como perdido">✕</button>` : '';
+    const tree = h('div', { className: 'cl-board' }, columns.map(col => h('section', {
+      key: col.id, className: 'cl-col',
+      onDragOver: e => { e.preventDefault(); e.currentTarget.classList.add('is-over'); },
+      onDragLeave: e => e.currentTarget.classList.remove('is-over'),
+      onDrop: e => { e.preventDefault(); e.currentTarget.classList.remove('is-over'); handleDrop(col.id); },
+    },
+      h('div', { className: 'cl-col__head' },
+        h('span', { className: 'cl-col__dot', style: { background: col.color } }),
+        h('span', { className: 'cl-col__name' }, col.name),
+        h('span', { className: 'cl-col__count' }, col.cards.length)),
+      col.summary ? h('div', { className: 'cl-col__sum' }, col.summary) : null,
+      col.cards.length
+        ? col.cards.map(p => h(C.PatientCard, {
+            key: p.id, patient: p,
+            onOpen: () => openContact(p.id),
+            onDragStart: e => { e.dataTransfer.setData('text/plain', p.id); e.currentTarget.classList.add('is-dragging'); kanbanDragSource = { id: p.id, from: col.id }; },
+            onDragEnd: e => e.currentTarget.classList.remove('is-dragging'),
+          }))
+        : h(C.EmptyState, { icon: 'info', title: 'Nenhum paciente aqui' }),
+      h('button', { className: 'cl-col__add', type: 'button', onClick: () => openLeadModal() }, '+ Adicionar paciente'),
+    )));
 
-    return `
-      <div class="kanban-card" draggable="true" ondragstart="kanbanDragStart(event,'${c.wa_id}')" ondragend="kanbanDragEnd(event)" onclick="openContact('${c.wa_id}')">
-        <div class="kanban-card-top">
-          <span class="avatar avatar-sm" style="background:${avatarColor(c.wa_id)}">${escapeHtml(initials(name))}</span>
-          <div class="min-w-0 flex-1">
-            <div class="kanban-card-name">${escapeHtml(name)}</div>
-            <div class="kanban-card-phone mono">${escapeHtml(c.phone)}</div>
-          </div>
-          ${c.sale_value ? `<span class="kanban-card-value">${fmtBRL(c.sale_value)}</span>` : ''}
-        </div>
-        ${c.interest ? `<div class="kanban-card-interest" title="${escapeHtml(c.interest)}">${escapeHtml(c.interest)}</div>` : ''}
-        <div class="kanban-card-meta">
-          ${tags.slice(0, 3).map(t => `<span class="kanban-card-tag">${escapeHtml(t)}</span>`).join('')}
-          ${attendBadge}
-          ${!c.ctwa_clid && c.is_ctwa ? '<span class="kanban-card-attend kanban-card-attend-no_show" title="O WhatsApp não entregou o ctwa_clid: não volta pro Meta">sem clid</span>' : ''}
-        </div>
-        <div class="flex items-center justify-between gap-2">
-          <span class="kanban-card-next kanban-card-next-${next.cls}">${escapeHtml(next.label)}</span>
-          <div class="kanban-card-actions">
-            <button class="action-btn" onclick='event.stopPropagation(); openApptModalFor("${c.wa_id}", ${JSON.stringify(escapeHtml(name))})' title="Agendar consulta">Agendar</button>
-            ${lostActionBtn}
-          </div>
-        </div>
-        ${c.assigned_to_name ? `<div class="kanban-card-owner">${escapeHtml(c.assigned_to_name)}</div>` : ''}
-      </div>
-    `;
-  }
-
-  function kanbanDragStart(ev, waId) {
-    kanbanDraggedWaId = waId;
-    ev.target.classList.add('dragging');
-    ev.dataTransfer.effectAllowed = 'move';
-  }
-  function kanbanDragEnd(ev) {
-    ev.target.classList.remove('dragging');
-  }
-  function kanbanDragOver(ev) {
-    ev.preventDefault();
-    ev.currentTarget.classList.add('drag-over');
-  }
-  function kanbanDragLeave(ev) {
-    ev.currentTarget.classList.remove('drag-over');
-  }
-  function kanbanDrop(ev, newStatus) {
-    ev.preventDefault();
-    ev.currentTarget.classList.remove('drag-over');
-    const waId = kanbanDraggedWaId;
-    kanbanDraggedWaId = null;
-    if (!waId) return;
-    const contact = kanbanContacts.find(c => c.wa_id === waId);
-    if (!contact || contact.status === newStatus) return;
-    if (newStatus === 'sale') { markSale(waId); return; }
-    markStatus(waId, newStatus);
+    root._reactRoot.render(tree);
   }
 
   // ===== Calendário (Bloco B2) =====
